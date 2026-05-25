@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "Table": {
+      "title": "Spreadsheet Table Schema and Rows",
+      "description": "Represents a user-created spreadsheet table with flexible schemas and data cell records.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "columns": { "type": "array" },
+        "rows": { "type": "array" }
+      },
+      "required": ["id", "name", "columns", "rows"]
+    },
+    "ChatSession": {
+      "title": "AI Grounded Conversation History",
+      "description": "Represents a side-by-side grounded session containing conversation history associated to a table.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "tableId": { "type": "string" },
+        "messages": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "tableId", "messages"]
+    }
+  },
+  "firestore": {
+    "origami_tables/{tableId}": {
+      "schema": "Table",
+      "description": "User created tables and columns spreadsheet configuration."
+    },
+    "origami_sessions/{sessionId}": {
+      "schema": "ChatSession",
+      "description": "User chat assistant history and grounded context."
+    }
+  }
+}

@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net (Pillar 1)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions (Pillar 3)
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    // Origami Tables Collection Rule setup
+    match /origami_tables/{tableId} {
+      allow read, write: if isSignedIn(); // Since it is for their personal firebase, standard Authenticated users can read/write
+    }
+
+    // Origami Sessions Collection Rule setup
+    match /origami_sessions/{sessionId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Founder Hub",
+  "description": "An elegant, interactive database and AI workspace to curate and filter tech founders, builders, and solopreneurs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
