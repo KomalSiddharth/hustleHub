@@ -25,26 +25,7 @@ export const DEFAULT_TABLES: Table[] = [
     createdAt: new Date().toISOString(),
     description: "Database track for software engineers, product developers, and architects.",
     columns: FORM_COLUMNS,
-    rows: [
-      {
-        id: "row_init_1",
-        "Name": "Aarav Sharma",
-        "Email": "aarav@example.com",
-        "Contact Number": "+91 90000 00001",
-        "Bio": "Full-stack founder building developer workflow products.",
-        "LinkedIn Profile": "https://linkedin.com/in/aarav",
-        "X Profile": "https://x.com/aarav_dev",
-        "Persona": "Tech",
-        "Problem Statement": "Developers spend too long writing and maintaining API documentation.",
-        "Experience (Yrs)": "5",
-        "Startup Name": "Synthetix Labs",
-        "Location": "Bengaluru, India",
-        "Product/Niche Description": "Developer productivity integrations and automated inline API documentation for TypeScript repositories.",
-        "Revenue Generated": "Yes",
-        "Revenue Amount": "$1,500",
-        "Status": "Active Founder"
-      }
-    ]
+    rows: []
   },
   {
     id: "table_growth",
@@ -52,26 +33,7 @@ export const DEFAULT_TABLES: Table[] = [
     createdAt: new Date().toISOString(),
     description: "Database track for marketers, growth hackers, and startup strategists.",
     columns: FORM_COLUMNS,
-    rows: [
-      {
-        id: "row_init_2",
-        "Name": "Maya Roy",
-        "Email": "maya@example.com",
-        "Contact Number": "+91 90000 00002",
-        "Bio": "Growth operator helping early SaaS teams find repeatable acquisition.",
-        "LinkedIn Profile": "https://linkedin.com/in/maya-growth",
-        "X Profile": "https://x.com/maya_rocket",
-        "Persona": "Growth",
-        "Problem Statement": "Early teams need clearer acquisition experiments before spending heavily.",
-        "Experience (Yrs)": "4",
-        "Startup Name": "SaaS Rocket",
-        "Location": "Delhi, India",
-        "Product/Niche Description": "B2B SaaS lead generation lists and outbound email automation scripts.",
-        "Revenue Generated": "Yes",
-        "Revenue Amount": "$3,200",
-        "Status": "Active Founder"
-      }
-    ]
+    rows: []
   },
   {
     id: "table_creator",
@@ -79,26 +41,7 @@ export const DEFAULT_TABLES: Table[] = [
     createdAt: new Date().toISOString(),
     description: "Database track for writers, community hubs, video producers, and podcasters.",
     columns: FORM_COLUMNS,
-    rows: [
-      {
-        id: "row_init_3",
-        "Name": "Karan Malhotra",
-        "Email": "karan@example.com",
-        "Contact Number": "+91 90000 00003",
-        "Bio": "Creator-founder writing about cloud, tools, and software teams.",
-        "LinkedIn Profile": "https://linkedin.com/in/karan-create",
-        "X Profile": "https://x.com/karan_codes",
-        "Persona": "Content Creation",
-        "Problem Statement": "Software leaders need clear summaries of fast-moving tooling shifts.",
-        "Experience (Yrs)": "6",
-        "Startup Name": "The Digital Nomad",
-        "Location": "Mumbai, India",
-        "Product/Niche Description": "Editorial analysis covering cloud runtimes and serverless tooling for builders.",
-        "Revenue Generated": "Yes",
-        "Revenue Amount": "$9,800",
-        "Status": "Active Founder"
-      }
-    ]
+    rows: []
   }
 ];
 

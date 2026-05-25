@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Database,
-  Home
+  Home,
+  Menu,
+  X
 } from "lucide-react";
 import { onSnapshot, collection } from "firebase/firestore";
 
@@ -30,6 +32,7 @@ export default function App() {
   const [firebaseConfig, setFirebaseConfig] = useState<SavedFirebaseConfig | null>(null);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Global Theme State
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -136,15 +139,12 @@ export default function App() {
     if (parsedTables.length === 0) {
       parsedTables = [...DEFAULT_TABLES];
     } else {
-      // Check if DEFAULT_TABLES are in the list. If not, add them. If yes, make sure their columns include the correct form columns.
       DEFAULT_TABLES.forEach((defT) => {
         const existingIdx = parsedTables.findIndex((t) => t.id === defT.id);
         if (existingIdx === -1) {
           parsedTables.push(defT);
         } else {
-          // Overwrite columns to ensure the new requested form fields are strictly available as columns!
           parsedTables[existingIdx].columns = defT.columns;
-          // Ensure default row is seeded if empty
           if (parsedTables[existingIdx].rows.length === 0 && defT.rows.length > 0) {
             parsedTables[existingIdx].rows = defT.rows;
           }
@@ -165,9 +165,7 @@ export default function App() {
     if (cachedC) {
       try {
         setChatSessions(JSON.parse(cachedC));
-      } catch (err) {
-        // Safe bypass
-      }
+      } catch (err) { }
     }
   }, []);
 
@@ -234,19 +232,6 @@ export default function App() {
   const saveTable = async (updatedTable: Table) => {
     setTables((prev) => prev.map((t) => (t.id === updatedTable.id ? updatedTable : t)));
     await saveTableToStore(updatedTable, isFirebaseConnected);
-    void syncTableToAirtable(updatedTable);
-  };
-
-  const syncTableToAirtable = async (table: Table) => {
-    try {
-      await fetch("/api/airtable/sync-table", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ table }),
-      });
-    } catch (err) {
-      console.warn("Airtable sync skipped:", err);
-    }
   };
 
   const saveSelectedChatSession = (tableId: string, updatedSession: ChatSession) => {
@@ -299,7 +284,6 @@ export default function App() {
     const activeT = tables.find((t) => t.id === activeTableId);
     if (!activeT || isGeneratingChat) return;
 
-    // Get active session or initialize baseline
     const activeS = chatSessions[activeT.id] || {
       id: "session_" + activeT.id,
       name: "Grounded Advisor",
@@ -327,7 +311,6 @@ export default function App() {
       messages: updatedMessages,
     };
 
-    // Save state instantly
     saveSelectedChatSession(activeT.id, sessionWithUserMsg);
     setIsGeneratingChat(true);
 
@@ -342,9 +325,7 @@ export default function App() {
         }),
       });
 
-      if (!resp.ok) {
-        throw new Error("Chat api failed.");
-      }
+      if (!resp.ok) throw new Error("Chat api failed.");
 
       const json = await resp.json();
       const rawAiText = json.result || "";
@@ -365,7 +346,6 @@ export default function App() {
 
       saveSelectedChatSession(activeT.id, sessionWithAiReply);
 
-      // --- PARSE ANY GROUNDED ROW MUTATIONS CARRIED OUT BY THE AI ---
       const actionSplitToken = "---ACTION---";
       if (rawAiText.includes(actionSplitToken)) {
         const parts = rawAiText.split(actionSplitToken);
@@ -376,11 +356,9 @@ export default function App() {
             if (parsed.action === "ADD_ROW" && parsed.rowData) {
               const newRowId = "row_" + Date.now().toString();
               const formattedRow: Record<string, any> = { id: newRowId };
-
               activeT.columns.forEach((c) => {
                 formattedRow[c.name] = parsed.rowData[c.name] !== undefined ? parsed.rowData[c.name] : "";
               });
-
               const updatedTable: Table = {
                 ...activeT,
                 rows: [...activeT.rows, formattedRow],
@@ -430,14 +408,12 @@ export default function App() {
   const handleClearHistory = () => {
     const activeT = tables.find((t) => t.id === activeTableId);
     if (!activeT) return;
-
     const cleared: ChatSession = {
       id: "session_" + activeT.id,
       name: "Grounded Advisor",
       tableId: activeT.id,
       messages: []
     };
-
     saveSelectedChatSession(activeT.id, cleared);
   };
 
@@ -450,28 +426,14 @@ export default function App() {
     }
   };
 
-  // Find active data objects
   const activeTable = tables.find((t) => t.id === activeTableId);
-
-  // Active Grounded Chat session or build standard initial state for current focused table
   const activeSession: ChatSession = activeTable
-    ? chatSessions[activeTable.id] || {
-        id: "session_" + activeTable.id,
-        name: "Grounded Advisor",
-        tableId: activeTable.id,
-        messages: []
-      }
-    : {
-        id: "session_general",
-        name: "Grounded Advisor",
-        tableId: "none",
-        messages: []
-      };
+    ? chatSessions[activeTable.id] || { id: "session_" + activeTable.id, name: "Grounded Advisor", tableId: activeTable.id, messages: [] }
+    : { id: "session_general", name: "Grounded Advisor", tableId: "none", messages: [] };
 
   return (
     <div className="flex bg-[#fbfcfd] min-h-screen h-screen overflow-hidden font-sans antialiased text-slate-800">
       {view === "landing" ? (
-        /* The Hustle Hub creative aesthetic landing page */
         <LandingPage
           onGoToDatabase={() => setView("database")}
           tables={tables}
@@ -489,143 +451,119 @@ export default function App() {
                   });
                 }
               });
-
-              const updatedTable: Table = {
-                ...trg,
-                columns: updatedColumns,
-                rows: [...trg.rows, freshRow]
-              };
+              const updatedTable: Table = { ...trg, columns: updatedColumns, rows: [...trg.rows, freshRow] };
               await saveTable(updatedTable);
             }
           }}
         />
       ) : (
-        /* High fidelity interactive Database Workspace view */
-        <div className="flex flex-1 h-full overflow-hidden">
-          <Sidebar
-            tables={tables}
-            activeTableId={activeTableId}
-            onSelectTable={(id) => setActiveTableId(id)}
-            sessionName={sessionName}
-          />
+        <div className="flex flex-1 h-full overflow-hidden relative">
+          
+          {/* Mobile Hamburger Toggle */}
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="md:hidden absolute top-4 left-4 z-30 p-2 bg-white rounded-lg shadow-md border border-slate-200"
+          >
+            <Menu className="w-5 h-5 text-slate-600" />
+          </button>
 
-          <main className="flex-1 flex flex-col overflow-hidden bg-[#f5f7f7]">
+          {/* Sidebar Overlay for Mobile */}
+          {isSidebarOpen && (
+            <div 
+              className="md:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+              onClick={() => setIsSidebarOpen(false)}
+            />
+          )}
+
+          <div className={`
+            fixed md:static inset-y-0 left-0 z-50 transition-transform duration-300 md:translate-x-0
+            ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+          `}>
+            <Sidebar
+              tables={tables}
+              activeTableId={activeTableId}
+              onSelectTable={(id) => {
+                setActiveTableId(id);
+                setIsSidebarOpen(false);
+              }}
+              sessionName={sessionName}
+              onClose={() => setIsSidebarOpen(false)}
+            />
+          </div>
+
+          <main className="flex-1 flex flex-col overflow-hidden bg-[#f5f7f7] w-full">
             {activeTableId === "spotlight" ? (
               <div className="flex-grow flex flex-col h-full overflow-hidden animate-fade-in">
-                {/* Standardized professional workspace header */}
                 <div className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between select-none shrink-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-lg font-bold">
-                      Product Spotlight
-                    </span>
-                    <span className="text-sm text-slate-500 hidden md:inline">Launches and feedback</span>
+                    <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-lg font-bold">Product Spotlight</span>
                   </div>
-                  <button
-                    onClick={() => setView("landing")}
-                    className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Home className="w-3.5 h-3.5 text-indigo-505" />
-                    <span>Home</span>
+                  <button onClick={() => setView("landing")} className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-sm">
+                    <Home className="w-3.5 h-3.5 text-indigo-500" />
+                    <span className="hidden sm:inline">Home</span>
                   </button>
                 </div>
-
-                <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
-                  <div className="w-full space-y-6">
-                    <ProductBoard />
-                  </div>
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+                  <ProductBoard />
                 </div>
               </div>
             ) : activeTableId === "gigs" ? (
               <div className="flex-grow flex flex-col h-full overflow-hidden animate-fade-in">
-                {/* Standardized professional workspace header */}
                 <div className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between select-none shrink-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-lg font-bold">
-                      Hiring
-                    </span>
-                    <span className="text-sm text-slate-500 hidden md:inline">Roles, contracts, and collabs</span>
+                    <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-lg font-bold">Hiring Board</span>
                   </div>
-                  <button
-                    onClick={() => setView("landing")}
-                    className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                  >
+                  <button onClick={() => setView("landing")} className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-sm">
                     <Home className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Home</span>
+                    <span className="hidden sm:inline">Home</span>
                   </button>
                 </div>
-
-                <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
-                  <div className="w-full space-y-6">
-                    <HiringBoard />
-                  </div>
+                <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+                  <HiringBoard />
                 </div>
               </div>
             ) : activeTableId === "whatsapp" ? (
               <div className="flex-grow flex flex-col h-full overflow-hidden animate-fade-in">
-                {/* Standardized professional workspace header */}
                 <div className="px-6 py-4 bg-white border-b border-slate-200 flex items-center justify-between select-none shrink-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-1 rounded-lg font-bold">
-                      Community Rooms
-                    </span>
-                    <span className="text-sm text-slate-500 hidden md:inline">Clean member chat by track</span>
+                    <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-lg font-bold">Community Rooms</span>
                   </div>
-                  <button
-                    onClick={() => setView("landing")}
-                    className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                  >
+                  <button onClick={() => setView("landing")} className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-2 rounded-lg transition-all flex items-center gap-1.5 shadow-sm">
                     <Home className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Home</span>
+                    <span className="hidden sm:inline">Home</span>
                   </button>
                 </div>
-
-                <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
-                  <div className="w-full">
-                    <WhatsAppCommunity tables={tables} sessionName={sessionName} />
-                  </div>
+                <div className="flex-1 overflow-y-auto p-2 md:p-6 custom-scrollbar bg-slate-100">
+                  <WhatsAppCommunity tables={tables} sessionName={sessionName} />
                 </div>
               </div>
             ) : activeTable ? (
-              <div className="flex-1 flex overflow-hidden">
-                {/* 1. Left hand: Grounded AI Companion inspired by uploaded image */}
-                <ChatAssistant
-                  session={activeSession}
-                  table={activeTable}
-                  onSendMessage={handleSendMessage}
-                  isGenerating={isGeneratingChat}
-                  onClearHistory={handleClearHistory}
-                />
-
-                {/* 2. Right hand: Modern interactive spreadsheet data table */}
-                <div className="flex-1 flex flex-col overflow-hidden min-w-[320px] bg-white border-l border-slate-200">
-                  {/* Small convenient quick toggle nav action bar */}
+              <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+                <div className="hidden lg:flex w-80 shrink-0 h-full border-r border-slate-200 overflow-hidden">
+                  <ChatAssistant session={activeSession} table={activeTable} onSendMessage={handleSendMessage} isGenerating={isGeneratingChat} onClearHistory={handleClearHistory} />
+                </div>
+                <div className="flex-1 flex flex-col overflow-hidden bg-white">
                   <div className="px-6 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-mono font-bold uppercase tracking-wider text-slate-550 select-none">
-                    <span className="flex items-center gap-2 text-xs text-slate-600 font-bold">
-                      <Database className="w-4 h-4 text-emerald-600" />
-                      <span>{activeTable.name} / Spreadsheet</span>
+                    <span className="flex items-center gap-2 text-xs text-slate-600 font-bold truncate">
+                      <Database className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="truncate">{activeTable.name} / Spreadsheet</span>
                     </span>
-                    <button
-                      onClick={() => setView("landing")}
-                      className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg cursor-pointer transition-all active:scale-95"
-                    >
+                    <button onClick={() => setView("landing")} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg cursor-pointer transition-all active:scale-95">
                       <Home className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Home</span>
+                      <span className="hidden sm:inline">Home</span>
                     </button>
                   </div>
-                  
-                  <SpreadsheetTable table={activeTable} onUpdateTable={saveTable} />
+                  <div className="flex-1 overflow-auto">
+                    <SpreadsheetTable table={activeTable} onUpdateTable={saveTable} />
+                  </div>
                 </div>
               </div>
             ) : (
-              <div className="flex-grow flex items-center justify-center bg-slate-950 p-6 flex-col text-center space-y-4 font-sans select-none h-full">
-                <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-800 shadow-lg">
-                  <Database className="w-8 h-8 text-indigo-400" />
-                </div>
+              <div className="flex-grow flex items-center justify-center bg-slate-950 p-6 flex-col text-center space-y-4 font-sans h-full">
+                <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center border border-slate-800 shadow-lg"><Database className="w-8 h-8 text-indigo-400" /></div>
                 <div className="space-y-1">
                   <h2 className="text-xl font-semibold text-white tracking-tight">Database Portal</h2>
-                  <p className="text-xs text-slate-400 max-w-sm">
-                    No active sheets. Create a database table in the left sidebar to get started.
-                  </p>
+                  <p className="text-xs text-slate-400 max-w-sm">No active sheets. Create a database table in the left sidebar to get started.</p>
                 </div>
               </div>
             )}
@@ -633,13 +571,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Settings configuration modal trigger if any */}
-      <FirebaseSettingsModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        config={firebaseConfig}
-        onSave={handleSaveFirebaseConfig}
-      />
+      <FirebaseSettingsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} config={firebaseConfig} onSave={handleSaveFirebaseConfig} />
     </div>
   );
 }

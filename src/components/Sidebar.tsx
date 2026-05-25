@@ -1,5 +1,5 @@
 import React from "react";
-import { Briefcase, Database, MessageCircle, Rocket } from "lucide-react";
+import { Briefcase, Database, MessageCircle, Rocket, X } from "lucide-react";
 import type { Table } from "../types";
 
 interface Props {
@@ -7,9 +7,10 @@ interface Props {
   activeTableId: string | null;
   onSelectTable: (id: string) => void;
   sessionName: string;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ tables, activeTableId, onSelectTable, sessionName }: Props) {
+export default function Sidebar({ tables, activeTableId, onSelectTable, sessionName, onClose }: Props) {
   const savedProfile = getSavedProfile();
   const displayName = savedProfile?.["Name"] || sessionName || "Founder";
   const email = savedProfile?.["Email"] || savedProfile?.["Persona"] || "Member profile";
@@ -21,7 +22,17 @@ export default function Sidebar({ tables, activeTableId, onSelectTable, sessionN
   ];
 
   return (
-    <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-slate-900 bg-slate-950 text-white">
+    <aside className="flex h-full w-[280px] shrink-0 flex-col border-r border-slate-900 bg-slate-950 text-white relative">
+      {/* Mobile Close Button */}
+      {onClose && (
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 md:hidden p-2 text-slate-400 hover:text-white transition-colors z-50"
+        >
+          <X className="h-6 w-6" />
+        </button>
+      )}
+
       <div className="border-b border-slate-900 p-5">
         <div className="flex items-center gap-3">
           <LogoMark />
@@ -50,7 +61,10 @@ export default function Sidebar({ tables, activeTableId, onSelectTable, sessionN
           {workspaceTabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => onSelectTable(tab.id)}
+              onClick={() => {
+                onSelectTable(tab.id);
+                if (onClose) onClose();
+              }}
               className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition ${
                 activeTableId === tab.id ? "bg-emerald-500 text-slate-950 shadow-sm" : "text-slate-300 hover:bg-slate-900"
               }`}
@@ -69,7 +83,10 @@ export default function Sidebar({ tables, activeTableId, onSelectTable, sessionN
               return (
                 <button
                   key={table.id}
-                  onClick={() => onSelectTable(table.id)}
+                  onClick={() => {
+                    onSelectTable(table.id);
+                    if (onClose) onClose();
+                  }}
                   className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                     active ? "bg-emerald-500 text-slate-950" : "text-slate-300 hover:bg-slate-900"
                   }`}

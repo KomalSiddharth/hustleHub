@@ -417,7 +417,7 @@ export default function LandingPage({ onGoToDatabase, tables, onAddRowToTable, o
               transition={{ duration: 0.5 }}
               className={`grid items-center gap-8 lg:grid-cols-2 ${index % 2 === 1 ? "lg:[&>*:first-child]:order-2" : ""}`}
             >
-              <WorkspaceScreen type={item.screen} />
+              <WorkspaceScreen type={item.screen} tables={tables} />
               <div className="space-y-4">
                 <div className="grid h-12 w-12 place-items-center rounded-2xl bg-stone-950 text-emerald-300">
                   <item.icon className="h-5 w-5" />
@@ -469,28 +469,32 @@ function LogoMark({ dark = false }: { dark?: boolean }) {
   );
 }
 
-function WorkspaceScreen({ type }: { type: string }) {
+function WorkspaceScreen({ type, tables }: { type: string; tables: Table[] }) {
   return (
     <div className="overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-2xl shadow-stone-950/15">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-stone-100 bg-stone-50/50 px-4 py-3">
         <div className="flex gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
           <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
         </div>
-        <div className="text-xs font-bold text-stone-400">Hustle Hub preview</div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Live Workspace Snapshot</div>
       </div>
       <div className="min-h-[340px] p-6">
-        {type === "database" && <DatabasePreview />}
-        {type === "products" && <ProductsPreview />}
-        {type === "hiring" && <HiringPreview />}
-        {type === "community" && <CommunityPreview />}
+        {type === "database" && <DatabasePreview tables={tables} />}
+        {type === "products" && <ProductsPreview tables={tables} />}
+        {type === "hiring" && <HiringPreview tables={tables} />}
+        {type === "community" && <CommunityPreview tables={tables} />}
       </div>
     </div>
   );
 }
 
-function DatabasePreview() {
+function DatabasePreview({ tables }: { tables: Table[] }) {
+  const allRows = useMemo(() => {
+    return tables.flatMap(t => t.rows).slice(0, 3);
+  }, [tables]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -498,116 +502,202 @@ function DatabasePreview() {
           <div className="text-xl font-black text-stone-950">Founder DB</div>
           <div className="text-sm text-stone-500">Searchable member records</div>
         </div>
-        <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">3 tracks</div>
+        <div className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">{tables.length} tracks</div>
       </div>
       <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
         <div className="mb-3 flex gap-2">
-          <div className="h-9 flex-1 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-400">Search founders, niches, revenue...</div>
+          <div className="h-9 flex-1 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-400 flex items-center gap-2">
+            <Search className="h-3 w-3" />
+            Search founders...
+          </div>
           <div className="h-9 w-24 rounded-xl bg-stone-950 px-3 py-2 text-center text-xs font-black text-white">Filter</div>
         </div>
-        <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
-          {["Aarav Sharma | Tech | Bengaluru | $1.5k", "Maya Roy | Growth | Delhi | $3.2k", "Karan Malhotra | Creator | Mumbai | $9.8k"].map((row, idx) => (
-            <motion.div
-              key={row}
-              animate={{ backgroundColor: ["#ffffff", idx === 1 ? "#ecfdf5" : "#ffffff", "#ffffff"] }}
-              transition={{ repeat: Infinity, duration: 2.8, delay: idx * 0.35 }}
-              className="grid grid-cols-[1fr_80px] border-b border-stone-100 px-3 py-3 text-sm last:border-b-0"
-            >
-              <span className="font-semibold text-stone-800">{row}</span>
-              <span className="text-xs font-black text-emerald-700">Open</span>
-            </motion.div>
-          ))}
+        <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+          {allRows.length > 0 ? (
+            allRows.map((row, idx) => (
+              <motion.div
+                key={row.id || idx}
+                animate={{ backgroundColor: ["#ffffff", idx === 0 ? "#f0fdf4" : "#ffffff", "#ffffff"] }}
+                transition={{ repeat: Infinity, duration: 3, delay: idx * 0.5 }}
+                className="grid grid-cols-[1fr_80px] border-b border-stone-100 px-4 py-3 text-sm last:border-b-0"
+              >
+                <div className="flex flex-col">
+                  <span className="font-bold text-stone-800">{row["Name"] || "Unnamed Founder"}</span>
+                  <span className="text-[10px] text-stone-500 uppercase font-bold tracking-tight">
+                    {row["Persona"]} • {row["Location"]} • {row["Revenue Amount"] || "No Revenue"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-end">
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-700 uppercase">Active</span>
+                </div>
+              </motion.div>
+            ))
+          ) : (
+            <div className="p-8 text-center text-xs text-stone-400 italic">No founders registered yet.</div>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function ProductsPreview() {
+function ProductsPreview({ tables }: { tables: Table[] }) {
+  const products = useMemo(() => {
+    return tables
+      .flatMap(t => t.rows)
+      .filter(row => row["Product/Niche Description"])
+      .slice(0, 2);
+  }, [tables]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xl font-black text-stone-950">Product launches</div>
-          <div className="text-sm text-stone-500">Upvotes and replies</div>
+          <div className="text-sm text-stone-500">Upvotes and feedback</div>
         </div>
-        <motion.div animate={{ y: [0, -4, 0] }} transition={{ repeat: Infinity, duration: 1.8 }} className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-black text-white">
+        <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ repeat: Infinity, duration: 2 }} className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg shadow-emerald-500/20">
           Launch
         </motion.div>
       </div>
-      {["SaaS Launch Kit", "GrowthFlow Engine"].map((item, idx) => (
-        <motion.div key={item} animate={{ x: [0, idx === 0 ? 8 : -5, 0] }} transition={{ repeat: Infinity, duration: 2.6, delay: idx * 0.4 }} className="rounded-2xl border border-stone-200 bg-white p-4">
-          <div className="flex gap-4">
-            <div className="grid h-20 w-14 place-items-center rounded-xl border border-stone-200 bg-stone-50 text-center">
-              <div className="text-lg font-black text-emerald-600">{idx === 0 ? "42" : "36"}</div>
-            </div>
-            <div className="flex-1">
-              <div className="text-base font-black text-stone-950">{item}</div>
-              <div className="mt-1 text-sm font-semibold text-stone-700">{idx === 0 ? "Fast starter kit for SaaS builders." : "Lead scoring for founder-led growth."}</div>
-              <div className="mt-3 flex gap-4 border-t border-stone-100 pt-3 text-xs font-bold text-indigo-600">
-                <span>Replies ({idx + 1})</span>
-                <span className="text-stone-400">Posted 2026-05-{idx === 0 ? "20" : "22"}</span>
+      {products.length > 0 ? (
+        products.map((item, idx) => (
+          <motion.div 
+            key={item.id || idx} 
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+          >
+            <div className="flex gap-4">
+              <div className="grid h-16 w-14 place-items-center rounded-xl border border-stone-100 bg-stone-50 text-center shrink-0">
+                <div className="text-lg font-black text-emerald-600">{Math.floor(Math.random() * 50) + 10}</div>
+                <div className="text-[8px] font-black text-stone-400 uppercase">Votes</div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-base font-black text-stone-950 truncate">{item["Startup Name"] || "New Startup"}</div>
+                <div className="mt-1 text-xs font-medium text-stone-600 line-clamp-2">{item["Product/Niche Description"]}</div>
+                <div className="mt-3 flex items-center justify-between border-t border-stone-50 pt-3">
+                  <div className="flex gap-2">
+                    <span className="text-[10px] font-black text-emerald-600">Replies ({Math.floor(Math.random() * 5)})</span>
+                    <span className="text-[10px] font-bold text-stone-300">|</span>
+                    <span className="text-[10px] font-bold text-stone-400">By {item["Name"]}</span>
+                  </div>
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                </div>
               </div>
             </div>
-          </div>
-        </motion.div>
-      ))}
+          </motion.div>
+        ))
+      ) : (
+        <div className="rounded-2xl border border-dashed border-stone-200 p-12 text-center text-xs text-stone-400">
+          Startups appear here after registration.
+        </div>
+      )}
     </div>
   );
 }
 
-function HiringPreview() {
+function HiringPreview({ tables }: { tables: Table[] }) {
+  const hiringContext = useMemo(() => {
+    return tables
+      .flatMap(t => t.rows)
+      .slice(0, 1);
+  }, [tables]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xl font-black text-stone-950">Hiring</div>
-          <div className="text-sm text-stone-500">Roles, collabs, co-founder asks</div>
+          <div className="text-sm text-stone-500">Roles and co-founder asks</div>
         </div>
-        <div className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white">Post opening</div>
+        <div className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-black text-white">Post role</div>
       </div>
       <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
         <div className="mb-3 flex flex-wrap gap-2">
           {["All", "Tech", "Growth", "Design"].map((filter, idx) => (
-            <motion.span key={filter} animate={{ scale: idx === 0 ? [1, 1.05, 1] : 1 }} transition={{ repeat: Infinity, duration: 2 }} className={`rounded-lg px-3 py-1.5 text-xs font-black ${idx === 0 ? "bg-white text-emerald-700 shadow-sm" : "text-stone-500"}`}>
+            <span key={filter} className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${idx === 0 ? "bg-white text-emerald-700 shadow-sm border border-stone-100" : "text-stone-400"}`}>
               {filter}
-            </motion.span>
+            </span>
           ))}
         </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <div className="text-base font-black text-stone-950">Product Designer and UI Prototyper</div>
-          <div className="mt-1 text-sm font-bold text-stone-600">Vibelabs UX</div>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-            <span className="rounded-lg bg-stone-100 px-2 py-1 text-stone-600">Bengaluru Hybrid</span>
-            <span className="rounded-lg bg-emerald-50 px-2 py-1 text-emerald-700">$90k - $110k</span>
+        <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="text-base font-black text-stone-950">
+            {hiringContext.length > 0 ? `Product Lead for ${hiringContext[0]["Startup Name"]}` : "Product Designer and UI Prototyper"}
           </div>
-          <div className="mt-4 border-t border-stone-100 pt-3 text-xs font-bold text-indigo-600">Replies (0)</div>
+          <div className="mt-1 text-xs font-bold text-emerald-600 uppercase tracking-tight">
+            {hiringContext.length > 0 ? hiringContext[0]["Name"] : "Vibelabs UX"}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2 text-[10px] font-black">
+            <span className="rounded-lg bg-stone-100 px-2.5 py-1.5 text-stone-600 border border-stone-200/50">Hybrid</span>
+            <span className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-emerald-700 border border-emerald-100">$90k - $120k</span>
+            <span className="rounded-lg bg-stone-900 px-2.5 py-1.5 text-white">Equity</span>
+          </div>
+          <div className="mt-4 flex items-center gap-2 border-t border-stone-50 pt-3 text-[10px] font-black text-indigo-500 uppercase tracking-wider">
+            <span>View Details</span>
+            <ArrowRight className="h-3 w-3" />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function CommunityPreview() {
+function CommunityPreview({ tables }: { tables: Table[] }) {
+  const recentNames = useMemo(() => {
+    return tables.flatMap(t => t.rows).map(r => r["Name"]).slice(0, 3);
+  }, [tables]);
+
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-white">
-      <div className="grid min-h-[300px] grid-cols-[190px_1fr]">
-        <div className="border-r border-slate-800 p-3">
-          <div className="mb-3 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-500">Search rooms...</div>
+    <div className="overflow-hidden rounded-2xl border border-slate-800 bg-[#0f172a] text-white shadow-2xl">
+      <div className="grid min-h-[300px] grid-cols-[160px_1fr]">
+        <div className="border-r border-slate-800/50 bg-slate-900/50 p-3">
+          <div className="mb-4 flex items-center gap-2 px-1">
+            <div className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rooms</span>
+          </div>
           {["Tech Builders", "Growth Lab", "Creator Studio"].map((room, idx) => (
-            <motion.div key={room} animate={{ x: [0, idx === 0 ? 5 : 0, 0] }} transition={{ repeat: Infinity, duration: 2.4, delay: idx * 0.3 }} className={`mb-2 rounded-xl p-3 ${idx === 0 ? "bg-slate-800" : ""}`}>
-              <div className="text-xs font-black">{room}</div>
-              <div className="mt-1 truncate text-[10px] text-slate-500">Latest founder conversation...</div>
-            </motion.div>
+            <div key={room} className={`mb-2 cursor-pointer rounded-xl p-3 transition ${idx === 0 ? "bg-slate-800 border border-slate-700" : "hover:bg-slate-800/40"}`}>
+              <div className="text-[11px] font-black">{room}</div>
+              <div className="mt-1 truncate text-[9px] text-slate-500 font-medium">3 members active</div>
+            </div>
           ))}
         </div>
-        <div className="space-y-3 p-4">
-          {["Does anyone have a clean Vite starter?", "Yes, keep API routes in server.ts.", "Just shipped filters for founder profiles."].map((msg, idx) => (
-            <motion.div key={msg} animate={{ opacity: [0.75, 1, 0.75] }} transition={{ repeat: Infinity, duration: 2.2, delay: idx * 0.35 }} className="max-w-[86%] rounded-2xl border border-slate-800 bg-slate-900 p-3">
-              <div className="text-xs font-black text-emerald-300">{idx === 0 ? "Aarav" : idx === 1 ? "Maya" : "Karan"}</div>
-              <div className="mt-1 text-sm text-slate-200">{msg}</div>
-            </motion.div>
-          ))}
+        <div className="flex flex-col">
+          <div className="border-b border-slate-800/50 px-4 py-3 text-[11px] font-black flex justify-between items-center">
+            <span>#tech-builders</span>
+            <Users className="h-3 w-3 text-slate-500" />
+          </div>
+          <div className="flex-1 space-y-3 p-4">
+            {(recentNames.length > 0 ? recentNames : ["Aarav", "Maya", "Karan"]).map((name, idx) => (
+              <motion.div 
+                key={idx} 
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.1 }}
+                className="max-w-[90%] rounded-2xl border border-slate-800/50 bg-slate-900/80 p-3 shadow-sm"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="h-4 w-4 rounded-full bg-emerald-500/20 flex items-center justify-center text-[8px] font-black text-emerald-400 border border-emerald-500/30">
+                    {name.charAt(0)}
+                  </div>
+                  <div className="text-[10px] font-black text-emerald-400">{name}</div>
+                  <span className="text-[8px] text-slate-600 font-bold ml-auto">2m ago</span>
+                </div>
+                <div className="text-xs text-slate-300 leading-relaxed">
+                  {idx === 0 ? "Just pushed the new filters to the founder DB!" : 
+                   idx === 1 ? "Great work. I'm testing the growth automation now." : 
+                   "I'll start drafting the launch post for the cohort."}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+          <div className="p-3 border-t border-slate-800/50">
+            <div className="bg-slate-800 rounded-xl px-3 py-2 text-[10px] text-slate-500 flex items-center justify-between">
+              <span>Type a message...</span>
+              <Send className="h-3 w-3" />
+            </div>
+          </div>
         </div>
       </div>
     </div>

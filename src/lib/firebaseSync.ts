@@ -203,3 +203,18 @@ export async function saveAppStateToStore(key: string, value: unknown) {
     handleFirestoreError(e, OperationType.WRITE, `founderdeck_app_state/${key}`);
   }
 }
+
+export async function getAppStateFromStore<T>(key: string): Promise<T | null> {
+  const db = getActiveFirestore();
+  if (!db) return null;
+
+  try {
+    const snap = await getDocFromServer(doc(db, "founderdeck_app_state", key));
+    if (snap.exists()) {
+      return (snap.data() as any).value as T;
+    }
+  } catch (e) {
+    console.warn(`Could not fetch app state for ${key}:`, e);
+  }
+  return null;
+}
