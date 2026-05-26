@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Briefcase, Heart, MessageSquare, Plus, Share2, MapPin, DollarSign, Calendar, Filter, ArrowUpDown, Send } from "lucide-react";
+import { Briefcase, Heart, MessageSquare, Plus, Share2, MapPin, DollarSign, Calendar, Filter, ArrowUpDown, Send, Search } from "lucide-react";
 import { saveAppStateToStore, getActiveFirestore } from "../lib/firebaseSync";
 import { onSnapshot, doc } from "firebase/firestore";
 
@@ -35,6 +35,9 @@ export default function HiringBoard() {
 
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [orderBy, setOrderBy] = useState<string>("newest");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [locationFilter, setLocationFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month
 
   const [roleTitle, setRoleTitle] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -162,7 +165,28 @@ export default function HiringBoard() {
   };
 
   const filteredJobs = jobs
-    .filter((j) => categoryFilter === "all" || j.category === categoryFilter)
+    .filter((j) => {
+      const matchesCategory = categoryFilter === "all" || j.category === categoryFilter;
+      const matchesSearch = searchQuery.trim() === "" || 
+        j.roleTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        j.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        j.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesLocation = locationFilter.trim() === "" || 
+        j.location.toLowerCase().includes(locationFilter.toLowerCase());
+      
+      let matchesDate = true;
+      if (dateFilter !== "all") {
+        const jobDate = new Date(j.createdAt);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - jobDate.getTime()) / (1000 * 3600 * 24));
+        
+        if (dateFilter === "today") matchesDate = diffDays === 0;
+        else if (dateFilter === "week") matchesDate = diffDays <= 7;
+        else if (dateFilter === "month") matchesDate = diffDays <= 30;
+      }
+
+      return matchesCategory && matchesSearch && matchesLocation && matchesDate;
+    })
     .sort((a, b) => {
       if (orderBy === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       if (orderBy === "likes") return b.likes - a.likes;
@@ -185,6 +209,80 @@ export default function HiringBoard() {
             Post an Opening
           </button>
         </header>
+
+        {/* Filters Section */}
+        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search roles, companies..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 transition-all"
+              />
+            </div>
+            {/* Location */}
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Filter by location..."
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 transition-all"
+              />
+            </div>
+            {/* Category */}
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 transition-all appearance-none cursor-pointer"
+              >
+                <option value="all">All Categories</option>
+                <option value="tech">Tech</option>
+                <option value="growth">Growth</option>
+                <option value="design">Design</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-50">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-slate-400" />
+              <div className="flex gap-1">
+                {["all", "today", "week", "month"].map((f) => (
+                  <button
+                    key={f}
+                    onClick={() => setDateFilter(f)}
+                    className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      dateFilter === f ? "bg-emerald-100 text-emerald-700" : "text-slate-400 hover:bg-slate-100"
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <ArrowUpDown className="w-4 h-4 text-slate-400" />
+              <select
+                value={orderBy}
+                onChange={(e) => setOrderBy(e.target.value)}
+                className="text-[10px] font-bold uppercase tracking-wider bg-transparent border-0 focus:ring-0 cursor-pointer text-slate-600"
+              >
+                <option value="newest">Newest First</option>
+                <option value="likes">Most Liked</option>
+              </select>
+            </div>
+          </div>
+        </div>
 
         {showForm && (
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">

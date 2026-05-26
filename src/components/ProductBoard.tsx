@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowUp, ArrowDown, MessageSquare, Plus, ExternalLink, Send, User } from "lucide-react";
+import { ArrowUp, ArrowDown, MessageSquare, Plus, ExternalLink, Send, User, TrendingUp, Trophy, Crown, Award } from "lucide-react";
 import { saveAppStateToStore, getActiveFirestore } from "../lib/firebaseSync";
 import { onSnapshot, doc } from "firebase/firestore";
 
@@ -97,14 +97,21 @@ export default function ProductBoard() {
   const handleSubmitProduct = (e: React.FormEvent) => {
     e.preventDefault();
     const profile = getActiveProfile();
-    if (!name.trim() || !tagline.trim() || !profile.name) return;
+    
+    // Fallback if profile name is missing
+    const makerName = profile.name || "Anonymous Founder";
+    
+    if (!name.trim() || !tagline.trim()) {
+      console.warn("Product Name and Tagline are required.");
+      return;
+    }
 
     const fresh: Product = {
       id: "prod_" + Date.now(),
       name: name.trim(),
       tagline: tagline.trim(),
       description: description.trim(),
-      makerName: profile.name,
+      makerName: makerName,
       makerRole: profile.role,
       url: url.trim() || "https://thehustlehub.workspace",
       upvotes: 1,
@@ -151,27 +158,38 @@ export default function ProductBoard() {
   const handleAddComment = (e: React.FormEvent, productId: string) => {
     e.preventDefault();
     const profile = getActiveProfile();
-    if (!profile.name.trim() || !newCommentText.trim()) return;
+
+    // Fallback if profile name is missing
+    const authorName = profile.name || "Anonymous Founder";
+
+    if (!newCommentText.trim()) return;
+
     const newComment: Comment = {
       id: "comment_" + Date.now(),
-      author: profile.name.trim(),
+      author: authorName,
       authorRole: profile.role,
       text: newCommentText.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
+
     const modified = products.map((p) => {
       if (p.id === productId) {
         return { ...p, comments: [...p.comments, newComment] };
       }
       return p;
     });
+
     saveProducts(modified);
     setNewCommentText("");
   };
 
+  const leaderboard = [...products]
+    .sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes))
+    .slice(0, 10);
+
   return (
     <div className="bg-slate-50 min-h-full p-4 md:p-8 font-sans text-slate-900">
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto space-y-8">
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight">Product Spotlight</h1>
@@ -231,72 +249,120 @@ export default function ProductBoard() {
           </div>
         )}
 
-        <div className="space-y-4">
-          {products.length === 0 && !showSubmitForm && (
-            <div className="text-center py-20 bg-white border border-dashed border-slate-300 rounded-3xl">
-              <p className="text-slate-400 font-medium">No products launched yet. Be the first!</p>
-            </div>
-          )}
-          {products.map((p) => (
-            <div key={p.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden hover:shadow-md transition-shadow">
-              <div className="p-6 flex items-start gap-6">
-                <div className="flex flex-col items-center gap-1 bg-slate-50 rounded-2xl p-2 border border-slate-100 min-w-[64px]">
-                  <button onClick={() => handleVote(p.id, "up")} className={`p-1.5 rounded-xl transition-colors ${p.userVoted === "up" ? "bg-emerald-100 text-emerald-600" : "hover:bg-white text-slate-400"}`}><ArrowUp className="w-6 h-6" /></button>
-                  <span className="font-black text-lg">{p.upvotes - p.downvotes}</span>
-                  <button onClick={() => handleVote(p.id, "down")} className={`p-1.5 rounded-xl transition-colors ${p.userVoted === "down" ? "bg-rose-100 text-rose-600" : "hover:bg-white text-slate-400"}`}><ArrowDown className="w-6 h-6" /></button>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 items-start">
+          <div className="space-y-4">
+            {products.length === 0 && !showSubmitForm && (
+              <div className="text-center py-20 bg-white border border-dashed border-slate-300 rounded-3xl">
+                <p className="text-slate-400 font-medium">No products launched yet. Be the first!</p>
+              </div>
+            )}
+            {products.map((p) => (
+              <div key={p.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden hover:shadow-md transition-shadow">
+                <div className="p-6 flex items-start gap-6">
+                  <div className="flex flex-col items-center gap-1 bg-slate-50 rounded-2xl p-2 border border-slate-100 min-w-[64px]">
+                    <button onClick={() => handleVote(p.id, "up")} className={`p-1.5 rounded-xl transition-colors ${p.userVoted === "up" ? "bg-emerald-100 text-emerald-600" : "hover:bg-white text-slate-400"}`}><ArrowUp className="w-6 h-6" /></button>
+                    <span className="font-black text-lg">{p.upvotes - p.downvotes}</span>
+                    <button onClick={() => handleVote(p.id, "down")} className={`p-1.5 rounded-xl transition-colors ${p.userVoted === "down" ? "bg-rose-100 text-rose-600" : "hover:bg-white text-slate-400"}`}><ArrowDown className="w-6 h-6" /></button>
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-black">{p.name}</h2>
+                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-indigo-600 transition-colors"><ExternalLink className="w-5 h-5" /></a>
+                    </div>
+                    <p className="text-indigo-600 font-bold text-sm uppercase tracking-wide">{p.tagline}</p>
+                    <p className="text-slate-600 text-sm leading-relaxed line-clamp-2">{p.description}</p>
+                    <div className="flex items-center gap-2 pt-2">
+                      <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold uppercase">{p.makerName.charAt(0)}</div>
+                      <span className="text-xs font-bold text-slate-500">By {p.makerName} ({p.makerRole})</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-black">{p.name}</h2>
-                    <a href={p.url} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-indigo-600 transition-colors"><ExternalLink className="w-5 h-5" /></a>
-                  </div>
-                  <p className="text-indigo-600 font-bold text-sm uppercase tracking-wide">{p.tagline}</p>
-                  <p className="text-slate-600 text-sm leading-relaxed line-clamp-2">{p.description}</p>
-                  <div className="flex items-center gap-2 pt-2">
-                    <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold uppercase">{p.makerName.charAt(0)}</div>
-                    <span className="text-xs font-bold text-slate-500">By {p.makerName} ({p.makerRole})</span>
-                  </div>
+
+                <div className="bg-slate-50/50 border-t border-slate-100 px-6 py-4">
+                  <button
+                    onClick={() => setExpandedFeedbackId(expandedFeedbackId === p.id ? null : p.id)}
+                    className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    {p.comments.length} Comments
+                  </button>
+
+                  {expandedFeedbackId === p.id && (
+                    <div className="mt-6 space-y-6 animate-in fade-in duration-300">
+                      <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                        {p.comments.map((c) => (
+                          <div key={c.id} className="flex gap-3">
+                            <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black shrink-0">{c.author.charAt(0)}</div>
+                            <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-black text-indigo-600">{c.author} • {c.authorRole}</span>
+                                <span className="text-[9px] text-slate-400">{c.timestamp}</span>
+                              </div>
+                              <p className="text-xs text-slate-700 leading-relaxed">{c.text}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <form onSubmit={(e) => handleAddComment(e, p.id)} className="relative mt-4">
+                        <input
+                          type="text" required placeholder="Write a supportive comment..."
+                          value={newCommentText} onChange={(e) => setNewCommentText(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-2xl pl-4 pr-12 py-3 text-sm focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
+                        />
+                        <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"><Send className="w-4 h-4" /></button>
+                      </form>
+                    </div>
+                  )}
                 </div>
               </div>
+            ))}
+          </div>
 
-              <div className="bg-slate-50/50 border-t border-slate-100 px-6 py-4">
-                <button
-                  onClick={() => setExpandedFeedbackId(expandedFeedbackId === p.id ? null : p.id)}
-                  className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  {p.comments.length} Comments
-                </button>
-
-                {expandedFeedbackId === p.id && (
-                  <div className="mt-6 space-y-6 animate-in fade-in duration-300">
-                    <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-                      {p.comments.map((c) => (
-                        <div key={c.id} className="flex gap-3">
-                          <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black shrink-0">{c.author.charAt(0)}</div>
-                          <div className="flex-1 bg-white border border-slate-200 rounded-2xl p-3 shadow-sm">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[10px] font-black text-indigo-600">{c.author} • {c.authorRole}</span>
-                              <span className="text-[9px] text-slate-400">{c.timestamp}</span>
-                            </div>
-                            <p className="text-xs text-slate-700 leading-relaxed">{c.text}</p>
-                          </div>
+          <aside className="space-y-6 sticky top-24">
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-amber-500" />
+                  Weekly Leaderboard
+                </h3>
+              </div>
+              <div className="space-y-1">
+                {leaderboard.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-4 text-center">No rankings yet.</p>
+                ) : (
+                  leaderboard.map((item, idx) => (
+                    <div key={item.id} className={`flex items-center gap-3 p-2 rounded-2xl transition-all group ${idx === 0 ? "bg-amber-50/50" : "hover:bg-slate-50"}`}>
+                      <div className="relative shrink-0">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black ${
+                          idx === 0 ? "bg-amber-100 text-amber-600 shadow-sm shadow-amber-200" : 
+                          idx === 1 ? "bg-slate-100 text-slate-600" : 
+                          idx === 2 ? "bg-orange-100 text-orange-600" : 
+                          "text-slate-400"
+                        }`}>
+                          {idx + 1}
                         </div>
-                      ))}
+                        {idx === 0 && <Crown className="w-3 h-3 text-amber-500 absolute -top-1.5 -right-1.5 rotate-12" />}
+                        {(idx === 1 || idx === 2) && <Award className={`w-3 h-3 absolute -top-1.5 -right-1.5 ${idx === 1 ? "text-slate-400" : "text-orange-400"}`} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-black text-slate-900 truncate group-hover:text-indigo-600 transition-colors">{item.name}</div>
+                        <div className="text-[10px] font-medium text-slate-500 truncate">{item.tagline}</div>
+                      </div>
+                      <div className="text-[10px] font-black text-indigo-600 px-2 py-1">
+                        {item.upvotes - item.downvotes}
+                      </div>
                     </div>
-                    <form onSubmit={(e) => handleAddComment(e, p.id)} className="relative mt-4">
-                      <input
-                        type="text" required placeholder="Write a supportive comment..."
-                        value={newCommentText} onChange={(e) => setNewCommentText(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-2xl pl-4 pr-12 py-3 text-sm focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
-                      />
-                      <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"><Send className="w-4 h-4" /></button>
-                    </form>
-                  </div>
+                  ))
                 )}
               </div>
+              {leaderboard.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Live Standings</p>
+                </div>
+              )}
             </div>
-          ))}
+          </aside>
         </div>
       </div>
     </div>

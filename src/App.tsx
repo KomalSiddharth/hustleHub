@@ -3,9 +3,11 @@ import {
   Database,
   Home,
   Menu,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
-import { onSnapshot, collection } from "firebase/firestore";
+import { onSnapshot, collection, doc } from "firebase/firestore";
 
 // Modularity imports
 import type { Table, ChatSession, SavedFirebaseConfig, Message } from "./types";
@@ -15,6 +17,7 @@ import {
   saveTableToStore,
   deleteTableFromStore,
   saveSessionToStore,
+  getActiveFirestore,
 } from "./lib/firebaseSync";
 
 // Components
@@ -90,6 +93,86 @@ export default function App() {
   // Active Selected Table ID
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
 
+  // Real-time data for previews
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [allCommunityMessages, setAllCommunityMessages] = useState<Record<string, any[]>>({});
+  const [allJobs, setAllJobs] = useState<any[]>([]);
+
+  // Chat sidebar resizing and visibility
+  const [chatSidebarWidth, setChatSidebarWidth] = useState(320);
+  const [isChatOpen, setIsChatOpen] = useState(true);
+  const isResizingChatRef = useRef(false);
+
+  const startResizingChat = (e: React.MouseEvent) => {
+    isResizingChatRef.current = true;
+    document.addEventListener("mousemove", handleMouseMoveChat);
+    document.addEventListener("mouseup", stopResizingChat);
+    document.body.style.cursor = "col-resize";
+  };
+
+  const handleMouseMoveChat = (e: MouseEvent) => {
+    if (!isResizingChatRef.current) return;
+    const sidebarElement = document.getElementById("main-app-sidebar");
+    const sidebarWidth = sidebarElement ? sidebarElement.offsetWidth : 260;
+    const newWidth = e.clientX - sidebarWidth;
+    if (newWidth > 200 && newWidth < 800) {
+      setChatSidebarWidth(newWidth);
+    }
+  };
+
+  const stopResizingChat = () => {
+    isResizingChatRef.current = false;
+    document.removeEventListener("mousemove", handleMouseMoveChat);
+    document.removeEventListener("mouseup", stopResizingChat);
+    document.body.style.cursor = "default";
+  };
+
+  const toggleChat = () => {
+    const next = !isChatOpen;
+    setIsChatOpen(next);
+    localStorage.setItem("founder_hub_chat_open", String(next));
+  };
+
+  useEffect(() => {
+    localStorage.setItem("founder_hub_chat_width", String(chatSidebarWidth));
+  }, [chatSidebarWidth]);
+
+  // --- 0. SYNC GLOBAL APP STATE (Products & Community) ---
+  useEffect(() => {
+    const db = getActiveFirestore();
+    if (!db) return;
+
+    // Listen to Products
+    const unsubProducts = onSnapshot(doc(db, "founderdeck_app_state", "products"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data && data.value) setAllProducts(data.value);
+      }
+    });
+
+    // Listen to Community Rooms
+    const unsubCommunity = onSnapshot(doc(db, "founderdeck_app_state", "community_rooms"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data && data.value) setAllCommunityMessages(data.value);
+      }
+    });
+
+    // Listen to Jobs
+    const unsubJobs = onSnapshot(doc(db, "founderdeck_app_state", "jobs"), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data && data.value) setAllJobs(data.value);
+      }
+    });
+
+    return () => {
+      unsubProducts();
+      unsubCommunity();
+      unsubJobs();
+    };
+  }, [firebaseConfig]);
+
   // Chat agent response progress state
   const [isGeneratingChat, setIsGeneratingChat] = useState(false);
 
@@ -98,6 +181,12 @@ export default function App() {
 
   // --- 1. BOOTSTRAP INITIALIZATION ---
   useEffect(() => {
+    // Load chat sidebar states from local storage
+    const savedWidth = localStorage.getItem("founder_hub_chat_width");
+    if (savedWidth) setChatSidebarWidth(Number(savedWidth));
+    const savedStatus = localStorage.getItem("founder_hub_chat_open");
+    if (savedStatus !== null) setIsChatOpen(savedStatus === "true");
+
     // Load config if any
     const savedConfig = localStorage.getItem("founderdeck_saved_firebase");
     let initialConfig: SavedFirebaseConfig | null = null;
@@ -437,6 +526,9 @@ export default function App() {
         <LandingPage
           onGoToDatabase={() => setView("database")}
           tables={tables}
+          products={allProducts}
+          communityMessages={allCommunityMessages}
+          jobs={allJobs}
           onRegisterSuccess={handleSetSessionName}
           onAddRowToTable={async (tableId, freshRow) => {
             const trg = tables.find((x) => x.id === tableId);
@@ -538,23 +630,77 @@ export default function App() {
                 </div>
               </div>
             ) : activeTable ? (
-              <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                <div className="hidden lg:flex w-80 shrink-0 h-full border-r border-slate-200 overflow-hidden">
-                  <ChatAssistant session={activeSession} table={activeTable} onSendMessage={handleSendMessage} isGenerating={isGeneratingChat} onClearHistory={handleClearHistory} />
-                </div>
+              <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+                {/* Chat Toggle Button (when closed) */}
+                {!isChatOpen && (
+                  <button 
+                    onClick={toggleChat}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white border border-slate-200 p-1.5 rounded-r-xl shadow-md hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-all"
+                    title="Open Chat"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+
+                {/* Resizable Chat Sidebar */}
+                {isChatOpen && (
+                  <div 
+                    className="hidden lg:flex shrink-0 h-full border-r border-slate-200 overflow-hidden relative group"
+                    style={{ width: chatSidebarWidth }}
+                  >
+                    <ChatAssistant 
+                      session={activeSession} 
+                      table={activeTable} 
+                      onSendMessage={handleSendMessage} 
+                      isGenerating={isGeneratingChat} 
+                      onClearHistory={handleClearHistory} 
+                    />
+                    
+                    {/* Resize Handle */}
+                    <div
+                      onMouseDown={startResizingChat}
+                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/30 transition-colors z-10"
+                    >
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-8 bg-white border border-slate-200 rounded-l-lg -mr-0.5 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="w-0.5 h-3 bg-slate-300 rounded-full mx-0.5" />
+                        <div className="w-0.5 h-3 bg-slate-300 rounded-full mx-0.5" />
+                      </div>
+                    </div>
+
+                    {/* Chat Close Button */}
+                    <button 
+                      onClick={toggleChat}
+                      className="absolute top-4 right-4 z-20 p-1.5 bg-white/80 backdrop-blur rounded-lg border border-slate-200 text-slate-400 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex-1 flex flex-col overflow-hidden bg-white">
                   <div className="px-6 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-mono font-bold uppercase tracking-wider text-slate-550 select-none">
-                    <span className="flex items-center gap-2 text-xs text-slate-600 font-bold truncate">
-                      <Database className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="truncate">{activeTable.name} / Spreadsheet</span>
-                    </span>
+                    <div className="flex items-center gap-4">
+                      <span className="flex items-center gap-2 text-xs text-slate-600 font-bold truncate">
+                        <Database className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="truncate">{activeTable.name} / Spreadsheet</span>
+                      </span>
+                      {isChatOpen && (
+                        <button 
+                          onClick={toggleChat}
+                          className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-200 text-slate-400 transition-colors"
+                        >
+                          <ChevronLeft className="w-3 h-3" />
+                          <span className="text-[10px]">Hide Chat</span>
+                        </button>
+                      )}
+                    </div>
                     <button onClick={() => setView("landing")} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg cursor-pointer transition-all active:scale-95">
                       <Home className="w-3.5 h-3.5 text-indigo-400" />
                       <span className="hidden sm:inline">Home</span>
                     </button>
                   </div>
-                  <div className="flex-1 overflow-auto">
-                    <SpreadsheetTable table={activeTable} onUpdateTable={saveTable} />
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    <SpreadsheetTable table={activeTable} onUpdateTable={saveTable} allTables={tables} />
                   </div>
                 </div>
               </div>

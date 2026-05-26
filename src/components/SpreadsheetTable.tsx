@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Sparkles,
   Plus,
@@ -16,16 +16,30 @@ import {
   Eye,
   Copy,
   X,
-  SlidersHorizontal
+  SlidersHorizontal,
+  FileText,
+  Lock,
+  Globe,
 } from "lucide-react";
 import type { Table, Column, ColumnType } from "../types";
 
+// Fields that require 30 days of community activity to view
+const SENSITIVE_FIELDS = new Set([
+  "Contact Number",
+  "LinkedIn Profile",
+  "X Profile",
+  "Email",
+  "Revenue Generated",
+  "Revenue Amount",
+]);
+
 interface Props {
   table: Table;
+  allTables?: Table[];
   onUpdateTable: (updatedTable: Table) => void;
 }
 
-export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
+export default function SpreadsheetTable({ table, allTables = [], onUpdateTable }: Props) {
   // Spreadsheet Level Filters
   const [textFilter, setTextFilter] = useState("");
   const [experienceFilter, setExperienceFilter] = useState(""); // filter by minimum experience
@@ -52,6 +66,25 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
 
   // Active select dropdown popup states
   const [activeDropdownCell, setActiveDropdownCell] = useState<{ rowIndex: number; colId: string } | null>(null);
+
+  // Cross-table keyword/niche search
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
+
+  // 30-day activity unlock tracking
+  const activityStatus = useMemo(() => {
+    let first = localStorage.getItem("hustle_hub_first_activity");
+    if (!first) {
+      first = Date.now().toString();
+      localStorage.setItem("hustle_hub_first_activity", first);
+    }
+    const elapsed = Date.now() - parseInt(first);
+    const daysElapsed = Math.floor(elapsed / (1000 * 60 * 60 * 24));
+    return {
+      isUnlocked: daysElapsed >= 30,
+      daysLeft: Math.max(0, 30 - daysElapsed),
+      daysElapsed,
+    };
+  }, []);
 
   // Column Properties Modal / state (Allows editing name or prompt template)
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
@@ -353,6 +386,21 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
     });
   };
 
+  // Cross-table global search results
+  const globalResults = useMemo(() => {
+    if (!showGlobalSearch || !textFilter.trim()) return [];
+    const query = textFilter.toLowerCase();
+    return allTables.flatMap((t) =>
+      t.rows
+        .filter((row) =>
+          Object.entries(row).some(
+            ([k, v]) => k !== "id" && String(v || "").toLowerCase().includes(query)
+          )
+        )
+        .map((row) => ({ ...row, __track: t.name }))
+    );
+  }, [showGlobalSearch, textFilter, allTables]);
+
   // Filter rows based on textFilter, experienceFilter, and revenueFilter
   const filteredRows = table.rows.filter((rowRecord) => {
     // 1. Universal Search (checks names, companies, titles, locations, niches, etc.)
@@ -425,11 +473,28 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
   };
 
   const handleDownloadJSON = () => {
+    if (!activityStatus.isUnlocked) return;
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(table, null, 2));
     const dlAnchorElem = document.createElement("a");
     dlAnchorElem.setAttribute("href", dataStr);
     dlAnchorElem.setAttribute("download", `founderdeck_vault_${table.id}.json`);
     dlAnchorElem.click();
+  };
+
+  const handleDownloadCSV = () => {
+    if (!activityStatus.isUnlocked) return;
+    const headers = table.columns.map((c) => `"${c.name.replace(/"/g, '""')}"`).join(",");
+    const rows = table.rows.map((row) =>
+      table.columns.map((col) => `"${String(row[col.name] ?? "").replace(/"/g, '""')}"`).join(",")
+    );
+    const csv = [headers, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `founderdeck_${table.id}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -448,7 +513,7 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {table.columns.some((c) => c.type === "prompt_ai") && (
             <button
               onClick={runAllAICells}
@@ -460,14 +525,47 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
             </button>
           )}
 
-          <button
-            onClick={handleDownloadJSON}
-            className="text-[10.5px] font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 bg-white px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-            title="Download Workspace State backup JSON"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Export JSON</span>
-          </button>
+          <div className="relative group">
+            <button
+              onClick={handleDownloadJSON}
+              disabled={!activityStatus.isUnlocked}
+              className={`text-[10.5px] font-semibold border px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs ${
+                activityStatus.isUnlocked
+                  ? "text-slate-700 hover:text-slate-900 hover:bg-slate-100 border-slate-200 bg-white cursor-pointer"
+                  : "text-slate-400 border-slate-200 bg-slate-50 cursor-not-allowed"
+              }`}
+              title={activityStatus.isUnlocked ? "Download JSON" : `Unlocks in ${activityStatus.daysLeft} days`}
+            >
+              {activityStatus.isUnlocked ? <Download className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+              <span>Export JSON</span>
+            </button>
+            {!activityStatus.isUnlocked && (
+              <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block z-10 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap">
+                🔒 Active {activityStatus.daysLeft} more days to unlock
+              </div>
+            )}
+          </div>
+
+          <div className="relative group">
+            <button
+              onClick={handleDownloadCSV}
+              disabled={!activityStatus.isUnlocked}
+              className={`text-[10.5px] font-semibold border px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-2xs ${
+                activityStatus.isUnlocked
+                  ? "text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 border-emerald-200 bg-white cursor-pointer"
+                  : "text-slate-400 border-slate-200 bg-slate-50 cursor-not-allowed"
+              }`}
+              title={activityStatus.isUnlocked ? "Download CSV" : `Unlocks in ${activityStatus.daysLeft} days`}
+            >
+              {activityStatus.isUnlocked ? <FileText className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+              <span>Export CSV</span>
+            </button>
+            {!activityStatus.isUnlocked && (
+              <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 hidden group-hover:block z-10 bg-slate-900 text-white text-[10px] font-bold px-2 py-1 rounded-lg whitespace-nowrap">
+                🔒 Active {activityStatus.daysLeft} more days to unlock
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -522,6 +620,22 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
           </select>
         </div>
 
+        {/* Search all tracks toggle */}
+        {allTables.length > 1 && textFilter.trim() && (
+          <button
+            onClick={() => setShowGlobalSearch((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-bold border transition-colors cursor-pointer ${
+              showGlobalSearch
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+            }`}
+            title="Search across all founder tracks"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            {showGlobalSearch ? "All Tracks" : "Search All Tracks"}
+          </button>
+        )}
+
         {/* Reset filters */}
         {(textFilter || experienceFilter || revenueFilter !== "all") && (
           <button
@@ -529,6 +643,7 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
               setTextFilter("");
               setExperienceFilter("");
               setRevenueFilter("all");
+              setShowGlobalSearch(false);
             }}
             className="text-[10px] font-bold text-rose-500 hover:underline px-2 py-1 cursor-pointer"
           >
@@ -536,6 +651,35 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
           </button>
         )}
       </div>
+
+      {/* Global search results panel */}
+      {showGlobalSearch && textFilter.trim() && (
+        <div className="shrink-0 bg-indigo-50/60 border border-indigo-200 rounded-xl p-3 space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 flex items-center gap-1.5">
+              <Globe className="w-3 h-3" />
+              {globalResults.length} founders matched "{textFilter}" across all tracks
+            </span>
+            <button onClick={() => setShowGlobalSearch(false)} className="text-[10px] text-slate-400 hover:text-slate-600 font-bold">✕</button>
+          </div>
+          {globalResults.length === 0 ? (
+            <p className="text-xs text-slate-400 py-2 text-center">No founders found across any track.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {globalResults.map((row, idx) => (
+                <div key={idx} className="bg-white border border-indigo-100 rounded-lg px-3 py-2 flex items-center gap-3 text-xs">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full shrink-0">
+                    {row.__track}
+                  </span>
+                  <span className="font-bold text-slate-800 truncate">{row["Name"] || "—"}</span>
+                  <span className="text-slate-400 truncate">{row["Startup Name"] || row["Bio"] || ""}</span>
+                  <span className="ml-auto shrink-0 text-slate-400">{row["Location"] || ""}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Grid Canvas Wrapper with dual split panel */}
       <div className="flex-1 flex overflow-hidden gap-4 min-h-[350px]">
@@ -628,6 +772,7 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
                     {table.columns.map((col) => {
                       const val = rowRecord[col.name];
                       const isLoading = runningRowCellIds[`${rIndex}_${col.id}`];
+                      const isCellLocked = SENSITIVE_FIELDS.has(col.name) && !activityStatus.isUnlocked;
 
                       return (
                         <td
@@ -641,8 +786,15 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
                             }
                           }}
                         >
-                          {/* Cell renderers depending on column types */}
-                          {col.type === "checkbox" ? (
+                          {/* Sensitive field lock */}
+                          {isCellLocked ? (
+                            <div className="flex items-center gap-1.5">
+                              <Lock className="w-3 h-3 text-amber-500 shrink-0" />
+                              <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                                {activityStatus.daysLeft}d to unlock
+                              </span>
+                            </div>
+                          ) : col.type === "checkbox" ? (
                             <div className="flex items-center justify-center p-1" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
@@ -870,17 +1022,19 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
               }).map((col) => {
                 const cellVal = selectedRow[col.name];
                 const isFocusedField = selectedFieldName === col.name;
+                const isFieldLocked = SENSITIVE_FIELDS.has(col.name) && !activityStatus.isUnlocked;
 
                 return (
                   <div key={col.id} className={`space-y-1 group rounded-xl ${isFocusedField ? "bg-emerald-50 border border-emerald-100 p-3" : ""}`}>
                     <div className="flex items-center justify-between">
-                      <label className="text-[9.5px] uppercase font-mono text-indigo-600 font-bold tracking-wider">
+                      <label className="text-[9.5px] uppercase font-mono text-indigo-600 font-bold tracking-wider flex items-center gap-1">
+                        {isFieldLocked && <Lock className="w-2.5 h-2.5 text-amber-500" />}
                         {col.name}
                         <span className="text-[8px] text-slate-500 lowercase ml-1 font-normal">({col.type})</span>
                         {isFocusedField && <span className="ml-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[8px] text-white">selected</span>}
                       </label>
 
-                      {cellVal && col.type === "text" && (
+                      {cellVal && col.type === "text" && !isFieldLocked && (
                         <button
                           onClick={() => {
                             navigator.clipboard.writeText(String(cellVal));
@@ -893,7 +1047,15 @@ export default function SpreadsheetTable({ table, onUpdateTable }: Props) {
                       )}
                     </div>
 
-                    {col.type === "checkbox" ? (
+                    {isFieldLocked ? (
+                      <div className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 flex items-center gap-2">
+                        <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <div>
+                          <p className="text-[10px] font-bold text-amber-700">Locked for {activityStatus.daysLeft} more days</p>
+                          <p className="text-[9px] text-amber-600 mt-0.5">Stay active for 30 days to unlock contact & revenue fields</p>
+                        </div>
+                      </div>
+                    ) : col.type === "checkbox" ? (
                       <div className="flex items-center h-9 bg-slate-50 border border-slate-200 rounded-lg px-3">
                         <input
                           type="checkbox"
