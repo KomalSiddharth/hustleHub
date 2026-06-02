@@ -1,4 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { getActiveAuth, saveUserProfile, getUserProfile } from "../lib/firebaseSync";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowRight,
@@ -32,6 +34,10 @@ interface Props {
   tables: Table[];
   onAddRowToTable: (tableId: string, rowData: Record<string, any>) => void;
   onRegisterSuccess: (name: string) => void;
+  onSignOut: () => void;
+  sessionName?: string;
+  isAuthenticated?: boolean;
+  authLoading?: boolean;
   products?: any[];
   communityMessages?: Record<string, any[]>;
   jobs?: any[];
@@ -111,6 +117,10 @@ export default function LandingPage({
   tables,
   onAddRowToTable,
   onRegisterSuccess,
+  onSignOut,
+  sessionName = "",
+  isAuthenticated = false,
+  authLoading = false,
   products = [],
   communityMessages = {},
   jobs = [],
@@ -138,12 +148,26 @@ export default function LandingPage({
   const [savedProfile, setSavedProfile] = useState<Record<string, any> | null>(() => {
     const saved = localStorage.getItem("hustle_hub_profile");
     if (!saved) return null;
-    try {
-      return JSON.parse(saved);
-    } catch {
-      return null;
-    }
+    try { return JSON.parse(saved); } catch { return null; }
   });
+
+  // Sync savedProfile whenever App.tsx updates sessionName (e.g. after auth login)
+  useEffect(() => {
+    if (sessionName) {
+      const p = localStorage.getItem("hustle_hub_profile");
+      if (p) { try { setSavedProfile(JSON.parse(p)); } catch {} }
+    } else {
+      setSavedProfile(null);
+    }
+  }, [sessionName]);
+
+  // Auth mode state
+  const [authMode, setAuthMode] = useState<"register" | "login">("register");
+  const [password, setPassword] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
 
   const totalFounders = useMemo(() => tables.reduce((sum, table) => sum + table.rows.length, 0), [tables]);
   const totalProducts = useMemo(
@@ -155,12 +179,22 @@ export default function LandingPage({
     setFormData((current) => ({ ...current, [key]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
     if (!formData.contactNumber.trim() || !formData.linkedin.trim()) {
       setErrorMessage("Contact Number and LinkedIn Profile are required.");
+      return;
+    }
+
+    if (!formData.email.trim()) {
+      setErrorMessage("Email is required to create your account.");
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters.");
       return;
     }
 
@@ -179,50 +213,137 @@ export default function LandingPage({
 
     setIsSubmitting(true);
 
-    const freshRow: Record<string, any> = {
-      id: "row_reg_" + Date.now().toString(),
-      Name: formData.name.trim(),
-      Email: formData.email.trim(),
-      "Contact Number": formData.contactNumber.trim(),
-      Bio: formData.bio.trim(),
-      "LinkedIn Profile": formData.linkedin.trim(),
-      "X Profile": formData.xProfile.trim(),
-      Persona: formData.persona,
-      "Problem Statement": formData.problemStatement.trim(),
-      "Experience (Yrs)": formData.experience.trim(),
-      "Startup Name": formData.startupName.trim(),
-      Location: formData.location.trim(),
-      "Product/Niche Description": formData.productDescription.trim(),
-      "Revenue Generated": formData.revenueGenerated,
-      "Revenue Amount": formData.revenueGenerated === "Yes" ? formData.revenueAmount.trim() : "",
-      Status: "Active Founder",
-    };
-
-    localStorage.setItem("hustle_hub_profile", JSON.stringify(freshRow));
-    setSavedProfile(freshRow);
-    onAddRowToTable(targetTable.id, freshRow);
-    onRegisterSuccess(formData.name.trim());
-
-    window.setTimeout(() => {
+    const auth = getActiveAuth();
+    if (!auth) {
+      setErrorMessage("Firebase not configured. Check your settings to enable accounts.");
       setIsSubmitting(false);
-      setIsSuccess(true);
-      setFormData({
-        name: "",
-        email: "",
-        contactNumber: "",
-        bio: "",
-        linkedin: "",
-        xProfile: "",
-        persona: "Tech",
-        problemStatement: "",
-        experience: "",
-        startupName: "",
-        location: "",
-        productDescription: "",
-        revenueGenerated: "No",
-        revenueAmount: "",
-      });
-    }, 450);
+      return;
+    }
+
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, formData.email.trim(), password);
+      const uid = cred.user.uid;
+
+      const freshRow: Record<string, any> = {
+        id: "row_reg_" + uid,
+        uid,
+        Name: formData.name.trim(),
+        Email: formData.email.trim(),
+        "Contact Number": formData.contactNumber.trim(),
+        Bio: formData.bio.trim(),
+        "LinkedIn Profile": formData.linkedin.trim(),
+        "X Profile": formData.xProfile.trim(),
+        Persona: formData.persona,
+        "Problem Statement": formData.problemStatement.trim(),
+        "Experience (Yrs)": formData.experience.trim(),
+        "Startup Name": formData.startupName.trim(),
+        Location: formData.location.trim(),
+        "Product/Niche Description": formData.productDescription.trim(),
+        "Revenue Generated": formData.revenueGenerated,
+        "Revenue Amount": formData.revenueGenerated === "Yes" ? formData.revenueAmount.trim() : "",
+        Status: "Active Founder",
+      };
+
+      await saveUserProfile(uid, freshRow);
+      localStorage.setItem("hustle_hub_profile", JSON.stringify(freshRow));
+      setSavedProfile(freshRow);
+      onAddRowToTable(targetTable.id, freshRow);
+      onRegisterSuccess(formData.name.trim());
+      setIsSubmitting(false);
+      onGoToDatabase();
+    } catch (err: any) {
+      setIsSubmitting(false);
+      if (err.code === "auth/email-already-in-use") {
+        setErrorMessage("This email already has an account. Use Sign In below.");
+        setAuthMode("login");
+        setLoginEmail(formData.email.trim());
+      } else if (err.code === "auth/invalid-email") {
+        setErrorMessage("Please enter a valid email address.");
+      } else {
+        setErrorMessage(err.message || "Registration failed. Please try again.");
+      }
+    }
+  };
+
+  const handleLogin = async () => {
+    setLoginError("");
+    if (!loginEmail.trim() || !loginPassword) {
+      setLoginError("Enter your email and password.");
+      return;
+    }
+    setIsLoginLoading(true);
+    const auth = getActiveAuth();
+    if (!auth) {
+      setLoginError("Firebase not configured.");
+      setIsLoginLoading(false);
+      return;
+    }
+    try {
+      const cred = await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword);
+      const profile = await getUserProfile(cred.user.uid);
+      if (profile) {
+        localStorage.setItem("hustle_hub_profile", JSON.stringify(profile));
+        setSavedProfile(profile);
+        onRegisterSuccess(profile["Name"] || "");
+      }
+      onGoToDatabase();
+    } catch (err: any) {
+      const msg =
+        err.code === "auth/invalid-credential" || err.code === "auth/wrong-password"
+          ? "Incorrect email or password."
+          : err.code === "auth/user-not-found"
+          ? "No account found with this email. Please register."
+          : err.message;
+      setLoginError(msg);
+    } finally {
+      setIsLoginLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    const auth = getActiveAuth();
+    if (!auth) { setLoginError("Firebase not configured."); return; }
+    setIsLoginLoading(true);
+    setLoginError("");
+    try {
+      const provider = new GoogleAuthProvider();
+      const cred = await signInWithPopup(auth, provider);
+      const uid = cred.user.uid;
+      let profile = await getUserProfile(uid);
+      if (!profile) {
+        // First Google login — create a minimal profile
+        profile = {
+          id: "row_reg_" + uid,
+          uid,
+          Name: cred.user.displayName || "",
+          Email: cred.user.email || "",
+          "Contact Number": "",
+          Bio: "",
+          "LinkedIn Profile": "",
+          "X Profile": "",
+          Persona: "Tech",
+          "Problem Statement": "",
+          "Experience (Yrs)": "",
+          "Startup Name": "",
+          Location: "",
+          "Product/Niche Description": "",
+          "Revenue Generated": "No",
+          "Revenue Amount": "",
+          Status: "Active Founder",
+        };
+        await saveUserProfile(uid, profile);
+      }
+      localStorage.setItem("hustle_hub_profile", JSON.stringify(profile));
+      setSavedProfile(profile);
+      onRegisterSuccess(profile["Name"] || cred.user.displayName || "");
+      onGoToDatabase();
+    } catch (err: any) {
+      if (err.code !== "auth/popup-closed-by-user") {
+        setLoginError(err.message || "Google sign-in failed.");
+      }
+    } finally {
+      setIsLoginLoading(false);
+    }
   };
 
   return (
@@ -235,7 +356,7 @@ export default function LandingPage({
           <div className="flex items-center gap-3">
             <LogoMark />
             <div>
-              <p className="text-base font-black tracking-[-0.03em] text-white">Hustle Hub</p>
+              <p className="text-base font-black tracking-[-0.03em] text-white">The Founder's Club</p>
               <p className="text-[11px] font-medium text-white/55">Founder community OS</p>
             </div>
           </div>
@@ -251,13 +372,23 @@ export default function LandingPage({
                 </div>
               </div>
             )}
-            <button
-              onClick={onGoToDatabase}
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-bold text-stone-950 shadow-sm transition hover:bg-emerald-100 active:scale-[0.98]"
-            >
-              <Database className="h-4 w-4" />
-              Founder DB
-            </button>
+            {isAuthenticated ? (
+              <button
+                onClick={onGoToDatabase}
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-bold text-stone-950 shadow-sm transition hover:bg-emerald-100 active:scale-[0.98]"
+              >
+                <Database className="h-4 w-4" />
+                Founder DB
+              </button>
+            ) : (
+              <a
+                href="#join"
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-bold text-stone-950 shadow-sm transition hover:bg-emerald-100 active:scale-[0.98]"
+              >
+                <Database className="h-4 w-4" />
+                Sign in
+              </a>
+            )}
           </div>
         </div>
       </header>
@@ -278,7 +409,7 @@ export default function LandingPage({
               Find your people.<br />Build faster.
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-white/72 md:text-lg">
-              Hustle Hub is the all-in-one community OS for early-stage founders — connect with builders in your niche, launch products for real feedback, hire or co-found, and chat in rooms built for your track. Everything in one place, no switching between tools.
+              The Founder's Club is the all-in-one community OS for early-stage founders — connect with builders in your niche, launch products for real feedback, hire or co-found, and chat in rooms built for your track. Everything in one place, no switching between tools.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a
@@ -319,18 +450,89 @@ export default function LandingPage({
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">Registration</p>
-                <h2 className="mt-1 text-2xl font-black tracking-tight text-stone-950">Founder profile</h2>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
-                  Fill in your short profile and we'll route you into the right founder database automatically.
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
+                  {savedProfile ? "Your Profile" : "Join the community"}
                 </p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-stone-950">
+                  {savedProfile ? "Welcome back" : "Founder profile"}
+                </h2>
+                {!savedProfile && (
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
+                    Create your account and get routed into the right founder track automatically.
+                  </p>
+                )}
               </div>
               <div className="hidden rounded-2xl bg-stone-950 p-3 text-white sm:block">
                 <Layers className="h-5 w-5" />
               </div>
             </div>
 
-            {isSuccess ? (
+            {/* Auth mode tabs — only shown when not logged in */}
+            {!savedProfile && (
+              <div className="mb-5 flex rounded-xl border border-stone-200 bg-stone-100/60 p-1">
+                {(["register", "login"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => { setAuthMode(mode); setErrorMessage(""); setLoginError(""); }}
+                    className={`flex-1 rounded-lg py-2 text-xs font-black transition ${
+                      authMode === mode
+                        ? "bg-white text-stone-950 shadow-sm"
+                        : "text-stone-400 hover:text-stone-600"
+                    }`}
+                  >
+                    {mode === "register" ? "Create Account" : "Sign In"}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {savedProfile ? (
+              <div className="space-y-5">
+                <div className="flex items-center gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-emerald-500 text-xl font-black text-white">
+                    {String(savedProfile["Name"] || "F").slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Signed in</p>
+                    <h3 className="text-lg font-black text-stone-950 truncate">{savedProfile["Name"] || "Founder"}</h3>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {savedProfile["Persona"] && (
+                        <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-bold text-white">{savedProfile["Persona"]}</span>
+                      )}
+                      {savedProfile["Startup Name"] && (
+                        <span className="rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-stone-600">{savedProfile["Startup Name"]}</span>
+                      )}
+                      {savedProfile["Location"] && (
+                        <span className="rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-stone-500">{savedProfile["Location"]}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {savedProfile["Bio"] && (
+                  <p className="rounded-xl border border-stone-100 bg-white px-4 py-3 text-sm leading-6 text-stone-600 line-clamp-3">
+                    {savedProfile["Bio"]}
+                  </p>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={onGoToDatabase}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-stone-950 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+                  >
+                    Open Founder DB
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={onSignOut}
+                    className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-500 transition hover:text-rose-600 hover:border-rose-200"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+            ) : isSuccess ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
                 <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-white">
                   <Check className="h-6 w-6" />
@@ -348,11 +550,34 @@ export default function LandingPage({
                   </button>
                 </div>
               </div>
+            ) : authMode === "login" ? (
+              <div className="space-y-4">
+                <GoogleButton onClick={handleGoogleSignIn} loading={isLoginLoading} />
+                <Divider />
+                <Field icon={Mail} label="Email" type="email" required value={loginEmail} onChange={setLoginEmail} />
+                <PasswordField label="Password" value={loginPassword} onChange={setLoginPassword} />
+                {loginError && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{loginError}</p>}
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  disabled={isLoginLoading}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-stone-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {isLoginLoading ? "Signing in..." : "Sign in with email"}
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+                <p className="text-center text-xs text-stone-400">
+                  New here?{" "}
+                  <button type="button" onClick={() => setAuthMode("register")} className="font-bold text-emerald-700 hover:underline">
+                    Create an account
+                  </button>
+                </p>
+              </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <Field icon={User} label="Name" value={formData.name} onChange={(value) => updateField("name", value)} />
-                  <Field icon={Mail} label="Email" type="email" value={formData.email} onChange={(value) => updateField("email", value)} />
+                  <Field icon={Mail} label="Email" required type="email" value={formData.email} onChange={(value) => updateField("email", value)} />
                   <Field icon={Phone} label="Contact Number" required value={formData.contactNumber} onChange={(value) => updateField("contactNumber", value)} />
                   <Field icon={MapPin} label="Location" value={formData.location} onChange={(value) => updateField("location", value)} />
                   <Field icon={Linkedin} label="LinkedIn Profile" required type="url" value={formData.linkedin} onChange={(value) => updateField("linkedin", value)} />
@@ -370,6 +595,7 @@ export default function LandingPage({
                   <Field label="How much revenue generated?" required value={formData.revenueAmount} onChange={(value) => updateField("revenueAmount", value)} />
                 )}
 
+                <PasswordField label="Password" required value={password} onChange={setPassword} hint="Min 6 characters — used to sign in next time" />
                 <TextArea label="Bio" value={formData.bio} onChange={(value) => updateField("bio", value)} rows={2} />
                 <TextArea label="Problem Statement" value={formData.problemStatement} onChange={(value) => updateField("problemStatement", value)} rows={2} />
                 <TextArea label="Product Description / Niche Targeting" value={formData.productDescription} onChange={(value) => updateField("productDescription", value)} rows={2} />
@@ -381,9 +607,19 @@ export default function LandingPage({
                   disabled={isSubmitting}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-stone-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:opacity-60"
                 >
-                  {isSubmitting ? "Adding profile..." : "Add founder profile"}
+                  {isSubmitting ? "Creating account..." : "Create account & join"}
                   <Send className="h-4 w-4" />
                 </button>
+
+                <Divider />
+                <GoogleButton onClick={handleGoogleSignIn} loading={isSubmitting} />
+
+                <p className="text-center text-xs text-stone-400">
+                  Already have an account?{" "}
+                  <button type="button" onClick={() => setAuthMode("login")} className="font-bold text-emerald-700 hover:underline">
+                    Sign in
+                  </button>
+                </p>
               </form>
             )}
           </motion.section>
@@ -474,7 +710,7 @@ export default function LandingPage({
           <div className="flex items-center gap-3">
             <LogoMark dark />
             <div>
-              <div className="font-black tracking-tight">Hustle Hub</div>
+              <div className="font-black tracking-tight">The Founder's Club</div>
               <div className="text-sm text-stone-500">Founder community OS</div>
             </div>
           </div>
@@ -756,7 +992,7 @@ function CommunityScreen({ communityMessages }: { communityMessages: Record<stri
     {
       name: "Alice Cooper",
       role: "Tech Person",
-      text: "Yes Vikram, check out the Hustle Hub custom server.ts. It mounts Vite dynamically in development mode and bundles cleanly via CJS in production.",
+      text: "Yes Vikram, check out the The Founder's Club custom server.ts. It mounts Vite dynamically in development mode and bundles cleanly via CJS in production.",
       time: "11:24 AM",
       color: "emerald",
     },
@@ -1265,5 +1501,75 @@ function TextArea({
         className="w-full resize-none rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
       />
     </label>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+  required,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  hint?: string;
+}) {
+  const [show, setShow] = useState(false);
+  return (
+    <label className="block text-left">
+      <span className="mb-1.5 block text-[11px] font-bold text-stone-500">
+        {label} {required && <span className="text-emerald-700">*</span>}
+      </span>
+      <div className="relative">
+        <input
+          type={show ? "text" : "password"}
+          required={required}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          minLength={6}
+          className="h-10 w-full rounded-xl border border-stone-200 bg-white px-3 pr-10 text-sm text-stone-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+        />
+        <button
+          type="button"
+          onClick={() => setShow((v) => !v)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-stone-400 hover:text-stone-700"
+        >
+          {show ? "Hide" : "Show"}
+        </button>
+      </div>
+      {hint && <p className="mt-1 text-[10px] text-stone-400">{hint}</p>}
+    </label>
+  );
+}
+
+function GoogleButton({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      className="flex w-full items-center justify-center gap-3 rounded-xl border border-stone-200 bg-white px-5 py-3 text-sm font-bold text-stone-800 shadow-sm transition hover:bg-stone-50 active:scale-[0.98] disabled:opacity-60"
+    >
+      <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
+        <path d="M47.532 24.552c0-1.636-.147-3.2-.421-4.695H24.48v8.878h12.969c-.56 3.01-2.24 5.56-4.775 7.27v6.044h7.732c4.525-4.17 7.126-10.31 7.126-17.497z" fill="#4285F4"/>
+        <path d="M24.48 48c6.503 0 11.958-2.154 15.943-5.851l-7.732-6.044c-2.154 1.445-4.908 2.297-8.211 2.297-6.314 0-11.663-4.265-13.574-10.003H2.87v6.241C6.84 42.892 15.128 48 24.48 48z" fill="#34A853"/>
+        <path d="M10.906 28.399A14.63 14.63 0 0 1 10.07 24c0-1.528.263-3.012.836-4.399v-6.24H2.87A23.985 23.985 0 0 0 .48 24c0 3.868.924 7.531 2.39 10.639l8.036-6.24z" fill="#FBBC05"/>
+        <path d="M24.48 9.598c3.558 0 6.749 1.224 9.265 3.624l6.942-6.942C36.434 2.391 30.983 0 24.48 0 15.128 0 6.84 5.108 2.87 13.361l8.036 6.24C12.817 13.863 18.166 9.598 24.48 9.598z" fill="#EA4335"/>
+      </svg>
+      Continue with Google
+    </button>
+  );
+}
+
+function Divider() {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 border-t border-stone-200" />
+      <span className="text-[11px] font-semibold text-stone-400">or</span>
+      <div className="flex-1 border-t border-stone-200" />
+    </div>
   );
 }

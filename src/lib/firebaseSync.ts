@@ -1,5 +1,21 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signOut,
+} from "firebase/auth";
+export {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signOut,
+};
 import {
   getFirestore,
   doc,
@@ -36,6 +52,7 @@ export interface FirestoreErrorInfo {
 // Global active instances
 let activeApp: ReturnType<typeof initializeApp> | null = null;
 let activeDb: Firestore | null = null;
+let activeAuth: ReturnType<typeof getAuth> | null = null;
 
 // Error handler specified by the Firebase Integration Skill
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
@@ -68,6 +85,7 @@ export async function initializeDynamicFirebase(config: SavedFirebaseConfig): Pr
     }
 
     activeDb = getFirestore(activeApp);
+    activeAuth = getAuth(activeApp);
 
     // CRITICAL CONSTRAINT (from Skill): Validate connection to Firestore initially via server fetch
     try {
@@ -93,9 +111,34 @@ export function getActiveFirestore(): Firestore | null {
   return activeDb;
 }
 
+export function getActiveAuth() {
+  return activeAuth;
+}
+
 export function clearActiveFirebase() {
   activeApp = null;
   activeDb = null;
+  activeAuth = null;
+}
+
+export async function saveUserProfile(uid: string, profile: Record<string, any>) {
+  const db = getActiveFirestore();
+  if (!db) return;
+  await setDoc(doc(db, "hustle_hub_members", uid), {
+    ...profile,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function getUserProfile(uid: string): Promise<Record<string, any> | null> {
+  const db = getActiveFirestore();
+  if (!db) return null;
+  try {
+    const snap = await getDocFromServer(doc(db, "hustle_hub_members", uid));
+    return snap.exists() ? (snap.data() as Record<string, any>) : null;
+  } catch {
+    return null;
+  }
 }
 
 // CRUD helper with dual modes (Firebase or LocalStorage)

@@ -23,23 +23,15 @@ import {
 } from "lucide-react";
 import type { Table, Column, ColumnType } from "../types";
 
-// Fields that require 30 days of community activity to view
-const SENSITIVE_FIELDS = new Set([
-  "Contact Number",
-  "LinkedIn Profile",
-  "X Profile",
-  "Email",
-  "Revenue Generated",
-  "Revenue Amount",
-]);
 
 interface Props {
   table: Table;
   allTables?: Table[];
   onUpdateTable: (updatedTable: Table) => void;
+  isAdmin?: boolean;
 }
 
-export default function SpreadsheetTable({ table, allTables = [], onUpdateTable }: Props) {
+export default function SpreadsheetTable({ table, allTables = [], onUpdateTable, isAdmin = false }: Props) {
   // Spreadsheet Level Filters
   const [textFilter, setTextFilter] = useState("");
   const [experienceFilter, setExperienceFilter] = useState(""); // filter by minimum experience
@@ -514,7 +506,7 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {table.columns.some((c) => c.type === "prompt_ai") && (
+          {isAdmin && table.columns.some((c) => c.type === "prompt_ai") && (
             <button
               onClick={runAllAICells}
               className="text-[10.5px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/50 px-3 py-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
@@ -570,87 +562,89 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
       </div>
 
       {/* --- SHEET FILTER CONTROLS BAR --- */}
-      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs flex flex-wrap gap-4 items-center shrink-0">
-        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-widest leading-none">
-          <Filter className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Filters</span>
-        </div>
-
-        {/* Search Input */}
-        <div className="flex-1 min-w-[180px] relative">
-          <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-            <Search className="w-3.5 h-3.5" />
+      {isAdmin && (
+        <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs flex flex-wrap gap-4 items-center shrink-0">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-widest leading-none">
+            <Filter className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Filters</span>
           </div>
-          <input
-            type="text"
-            placeholder="Search matching names, titles, niche..."
-            value={textFilter}
-            onChange={(e) => setTextFilter(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-400 focus:bg-white rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 text-slate-700 transition-colors"
-          />
+
+          {/* Search Input */}
+          <div className="flex-1 min-w-[180px] relative">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-3.5 h-3.5" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search matching names, titles, niche..."
+              value={textFilter}
+              onChange={(e) => setTextFilter(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-400 focus:bg-white rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 text-slate-700 transition-colors"
+            />
+          </div>
+
+          {/* Experience minimum filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Min Exp (Yrs):</label>
+            <select
+              value={experienceFilter}
+              onChange={(e) => setExperienceFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-xs px-2 py-1.5 rounded-md focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+            >
+              <option value="">All</option>
+              <option value="1">1+ Years</option>
+              <option value="3">3+ Years</option>
+              <option value="5">5+ Years</option>
+              <option value="8">8+ Years</option>
+            </select>
+          </div>
+
+          {/* Revenue filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Revenue Status:</label>
+            <select
+              value={revenueFilter}
+              onChange={(e) => setRevenueFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-200 text-xs px-2 py-1.5 rounded-md focus:ring-1 focus:ring-indigo-500 cursor-pointer text-slate-700"
+            >
+              <option value="all">All Records</option>
+              <option value="yes">With Revenue / Profitable</option>
+              <option value="no">Pre-Revenue</option>
+            </select>
+          </div>
+
+          {/* Search all tracks toggle */}
+          {allTables.length > 1 && textFilter.trim() && (
+            <button
+              onClick={() => setShowGlobalSearch((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-bold border transition-colors cursor-pointer ${
+                showGlobalSearch
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : "bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+              }`}
+              title="Search across all founder tracks"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              {showGlobalSearch ? "All Tracks" : "Search All Tracks"}
+            </button>
+          )}
+
+          {/* Reset filters */}
+          {(textFilter || experienceFilter || revenueFilter !== "all") && (
+            <button
+              onClick={() => {
+                setTextFilter("");
+                setExperienceFilter("");
+                setRevenueFilter("all");
+                setShowGlobalSearch(false);
+              }}
+              className="text-[10px] font-bold text-rose-500 hover:underline px-2 py-1 cursor-pointer"
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
-
-        {/* Experience minimum filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Min Exp (Yrs):</label>
-          <select
-            value={experienceFilter}
-            onChange={(e) => setExperienceFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-xs px-2 py-1.5 rounded-md focus:ring-1 focus:ring-indigo-500 cursor-pointer"
-          >
-            <option value="">All</option>
-            <option value="1">1+ Years</option>
-            <option value="3">3+ Years</option>
-            <option value="5">5+ Years</option>
-            <option value="8">8+ Years</option>
-          </select>
-        </div>
-
-        {/* Revenue filter */}
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Revenue Status:</label>
-          <select
-            value={revenueFilter}
-            onChange={(e) => setRevenueFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-xs px-2 py-1.5 rounded-md focus:ring-1 focus:ring-indigo-500 cursor-pointer text-slate-700"
-          >
-            <option value="all">All Records</option>
-            <option value="yes">With Revenue / Profitable</option>
-            <option value="no">Pre-Revenue</option>
-          </select>
-        </div>
-
-        {/* Search all tracks toggle */}
-        {allTables.length > 1 && textFilter.trim() && (
-          <button
-            onClick={() => setShowGlobalSearch((v) => !v)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10.5px] font-bold border transition-colors cursor-pointer ${
-              showGlobalSearch
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-            }`}
-            title="Search across all founder tracks"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            {showGlobalSearch ? "All Tracks" : "Search All Tracks"}
-          </button>
-        )}
-
-        {/* Reset filters */}
-        {(textFilter || experienceFilter || revenueFilter !== "all") && (
-          <button
-            onClick={() => {
-              setTextFilter("");
-              setExperienceFilter("");
-              setRevenueFilter("all");
-              setShowGlobalSearch(false);
-            }}
-            className="text-[10px] font-bold text-rose-500 hover:underline px-2 py-1 cursor-pointer"
-          >
-            Clear Filters
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Global search results panel */}
       {showGlobalSearch && textFilter.trim() && (
@@ -704,26 +698,28 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
                         </span>
                       </div>
 
-                      <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
-                        <button
-                          onClick={() => {
-                            setEditingColumn(col);
-                            setEditingColName(col.name);
-                            setEditingColPrompt(col.promptTemplate || "");
-                          }}
-                          className="p-0.5 hover:bg-slate-200 rounded-sm text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
-                          title="Edit Schema Options"
-                        >
-                          <Settings2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteColumn(col.id)}
-                          className="p-0.5 hover:bg-rose-50 rounded-sm text-slate-405 hover:text-rose-600 transition-colors cursor-pointer"
-                          title="Delete Field"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {isAdmin && (
+                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingColumn(col);
+                              setEditingColName(col.name);
+                              setEditingColPrompt(col.promptTemplate || "");
+                            }}
+                            className="p-0.5 hover:bg-slate-200 rounded-sm text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                            title="Edit Schema Options"
+                          >
+                            <Settings2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteColumn(col.id)}
+                            className="p-0.5 hover:bg-rose-50 rounded-sm text-slate-405 hover:text-rose-600 transition-colors cursor-pointer"
+                            title="Delete Field"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </th>
                 ))}
@@ -745,13 +741,15 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
                     {/* Index row */}
                     <td className="w-12 text-center text-slate-400 font-mono font-normal border-r border-slate-100 bg-slate-50/20 relative group">
                       <span className="group-hover:hidden">{rIndex + 1}</span>
-                      <button
-                        onClick={() => handleDeleteRow(rIndex)}
-                        className="hidden group-hover:inline-block absolute inset-0 mx-auto my-auto w-5 h-5 text-rose-550 hover:text-rose-700 p-0 rounded-md shrink-0 cursor-pointer"
-                        title="Delete this row"
-                      >
-                        x
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteRow(rIndex)}
+                          className="hidden group-hover:inline-block absolute inset-0 mx-auto my-auto w-5 h-5 text-rose-550 hover:text-rose-700 p-0 rounded-md shrink-0 cursor-pointer"
+                          title="Delete this row"
+                        >
+                          x
+                        </button>
+                      )}
                     </td>
 
                     {/* View Drawer Action Column */}
@@ -772,7 +770,6 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
                     {table.columns.map((col) => {
                       const val = rowRecord[col.name];
                       const isLoading = runningRowCellIds[`${rIndex}_${col.id}`];
-                      const isCellLocked = SENSITIVE_FIELDS.has(col.name) && !activityStatus.isUnlocked;
 
                       return (
                         <td
@@ -786,15 +783,7 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
                             }
                           }}
                         >
-                          {/* Sensitive field lock */}
-                          {isCellLocked ? (
-                            <div className="flex items-center gap-1.5">
-                              <Lock className="w-3 h-3 text-amber-500 shrink-0" />
-                              <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                {activityStatus.daysLeft}d to unlock
-                              </span>
-                            </div>
-                          ) : col.type === "checkbox" ? (
+                          {col.type === "checkbox" ? (
                             <div className="flex items-center justify-center p-1" onClick={(e) => e.stopPropagation()}>
                               <input
                                 type="checkbox"
@@ -905,84 +894,86 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
           </table>
 
           {/* Table Footer triggers */}
-          <div className="p-3 border-t border-slate-150 bg-slate-50 flex items-center gap-3 shrink-0">
-            <button
-              onClick={handleAddRow}
-              className="text-xs font-bold text-slate-800 hover:text-slate-900 flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer shadow-2xs active:scale-95"
-            >
-              <Plus className="w-4 h-4 text-slate-500" /> New Row
-            </button>
-
-            {!isAddingColumn ? (
+          {isAdmin && (
+            <div className="p-3 border-t border-slate-150 bg-slate-50 flex items-center gap-3 shrink-0">
               <button
-                onClick={() => setIsAddingColumn(true)}
+                onClick={handleAddRow}
                 className="text-xs font-bold text-slate-800 hover:text-slate-900 flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer shadow-2xs active:scale-95"
               >
-                <ListPlus className="w-4 h-4 text-slate-500" /> New Field (Column)
+                <Plus className="w-4 h-4 text-slate-500" /> New Row
               </button>
-            ) : (
-              <form onSubmit={handleAddColumn} className="bg-slate-50 text-slate-805 rounded-lg p-3 flex flex-wrap gap-2.5 items-center border border-slate-200 animate-fade-in text-xs w-full max-w-4xl text-left">
-                <input
-                  type="text"
-                  required
-                  placeholder="Column Name (e.g., Sentiment)"
-                  value={newColName}
-                  onChange={(e) => setNewColName(e.target.value)}
-                  className="bg-white border border-slate-300 text-slate-800 rounded-md px-2.5 py-1.5 w-44 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden"
-                />
 
-                <select
-                  value={newColType}
-                  onChange={(e) => setNewColType(e.target.value as ColumnType)}
-                  className="bg-white border border-slate-300 text-slate-705 rounded-md px-2.5 py-1.5 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden font-semibold cursor-pointer"
+              {!isAddingColumn ? (
+                <button
+                  onClick={() => setIsAddingColumn(true)}
+                  className="text-xs font-bold text-slate-800 hover:text-slate-900 flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 px-3.5 py-1.5 rounded-lg transition-all cursor-pointer shadow-2xs active:scale-95"
                 >
-                  <option value="text">Text Input</option>
-                  <option value="number">Numeric Row</option>
-                  <option value="checkbox">Checkbox toggle</option>
-                  <option value="select">Select Option Column</option>
-                  <option value="prompt_ai">Ask AI (Formula)</option>
-                </select>
-
-                {newColType === "select" && (
+                  <ListPlus className="w-4 h-4 text-slate-500" /> New Field (Column)
+                </button>
+              ) : (
+                <form onSubmit={handleAddColumn} className="bg-slate-50 text-slate-805 rounded-lg p-3 flex flex-wrap gap-2.5 items-center border border-slate-200 animate-fade-in text-xs w-full max-w-4xl text-left">
                   <input
                     type="text"
                     required
-                    placeholder="Enter Options e.g: High, Med, Low"
-                    value={newColOptions}
-                    onChange={(e) => setNewColOptions(e.target.value)}
-                    className="bg-white border border-slate-300 text-slate-800 rounded-md px-2.5 py-1.5 w-56 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden"
+                    placeholder="Column Name (e.g., Sentiment)"
+                    value={newColName}
+                    onChange={(e) => setNewColName(e.target.value)}
+                    className="bg-white border border-slate-300 text-slate-800 rounded-md px-2.5 py-1.5 w-44 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden"
                   />
-                )}
 
-                {newColType === "prompt_ai" && (
-                  <input
-                    type="text"
-                    required
-                    placeholder="Prompt Template e.g: Evaluate: '{{Name}}'"
-                    value={newColPrompt}
-                    onChange={(e) => setNewColPrompt(e.target.value)}
-                    className="bg-white border border-slate-300 text-slate-800 rounded-md px-2.5 py-1.5 w-72 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden font-mono text-[11px]"
-                  />
-                )}
+                  <select
+                    value={newColType}
+                    onChange={(e) => setNewColType(e.target.value as ColumnType)}
+                    className="bg-white border border-slate-300 text-slate-705 rounded-md px-2.5 py-1.5 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden font-semibold cursor-pointer"
+                  >
+                    <option value="text">Text Input</option>
+                    <option value="number">Numeric Row</option>
+                    <option value="checkbox">Checkbox toggle</option>
+                    <option value="select">Select Option Column</option>
+                    <option value="prompt_ai">Ask AI (Formula)</option>
+                  </select>
 
-                <div className="flex gap-2 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingColumn(false)}
-                    className="bg-white border border-slate-200 text-slate-550 hover:text-slate-800 hover:bg-slate-100 px-3 py-1.5 rounded-md cursor-pointer text-xs font-bold transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-md font-bold cursor-pointer text-xs transition"
-                  >
-                    Confirm
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
+                  {newColType === "select" && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Enter Options e.g: High, Med, Low"
+                      value={newColOptions}
+                      onChange={(e) => setNewColOptions(e.target.value)}
+                      className="bg-white border border-slate-300 text-slate-800 rounded-md px-2.5 py-1.5 w-56 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden"
+                    />
+                  )}
+
+                  {newColType === "prompt_ai" && (
+                    <input
+                      type="text"
+                      required
+                      placeholder="Prompt Template e.g: Evaluate: '{{Name}}'"
+                      value={newColPrompt}
+                      onChange={(e) => setNewColPrompt(e.target.value)}
+                      className="bg-white border border-slate-300 text-slate-800 rounded-md px-2.5 py-1.5 w-72 focus:ring-1 focus:ring-indigo-500 focus:outline-hidden font-mono text-[11px]"
+                    />
+                  )}
+
+                  <div className="flex gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingColumn(false)}
+                      className="bg-white border border-slate-200 text-slate-550 hover:text-slate-800 hover:bg-slate-100 px-3 py-1.5 rounded-md cursor-pointer text-xs font-bold transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-1.5 rounded-md font-bold cursor-pointer text-xs transition"
+                    >
+                      Confirm
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
         </div>
 
         {/* --- MULTIPLE COLUMN RIGHT SLIDING DETAILS INSPECTION DRAWER --- */}
@@ -1022,19 +1013,17 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
               }).map((col) => {
                 const cellVal = selectedRow[col.name];
                 const isFocusedField = selectedFieldName === col.name;
-                const isFieldLocked = SENSITIVE_FIELDS.has(col.name) && !activityStatus.isUnlocked;
 
                 return (
                   <div key={col.id} className={`space-y-1 group rounded-xl ${isFocusedField ? "bg-emerald-50 border border-emerald-100 p-3" : ""}`}>
                     <div className="flex items-center justify-between">
-                      <label className="text-[9.5px] uppercase font-mono text-indigo-600 font-bold tracking-wider flex items-center gap-1">
-                        {isFieldLocked && <Lock className="w-2.5 h-2.5 text-amber-500" />}
+                      <label className="text-[9.5px] uppercase font-mono text-indigo-600 font-bold tracking-wider">
                         {col.name}
                         <span className="text-[8px] text-slate-500 lowercase ml-1 font-normal">({col.type})</span>
                         {isFocusedField && <span className="ml-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[8px] text-white">selected</span>}
                       </label>
 
-                      {cellVal && col.type === "text" && !isFieldLocked && (
+                      {cellVal && col.type === "text" && (
                         <button
                           onClick={() => {
                             navigator.clipboard.writeText(String(cellVal));
@@ -1047,15 +1036,7 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable 
                       )}
                     </div>
 
-                    {isFieldLocked ? (
-                      <div className="w-full bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 flex items-center gap-2">
-                        <Lock className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                        <div>
-                          <p className="text-[10px] font-bold text-amber-700">Locked for {activityStatus.daysLeft} more days</p>
-                          <p className="text-[9px] text-amber-600 mt-0.5">Stay active for 30 days to unlock contact & revenue fields</p>
-                        </div>
-                      </div>
-                    ) : col.type === "checkbox" ? (
+                    {col.type === "checkbox" ? (
                       <div className="flex items-center h-9 bg-slate-50 border border-slate-200 rounded-lg px-3">
                         <input
                           type="checkbox"

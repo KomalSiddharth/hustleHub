@@ -37,7 +37,7 @@ export default function Sidebar({ tables, activeTableId, onSelectTable, sessionN
         <div className="flex items-center gap-3">
           <LogoMark />
           <div className="min-w-0">
-            <div className="text-sm font-black tracking-tight">Hustle Hub</div>
+            <div className="text-sm font-black tracking-tight">The Founder's Club</div>
             <div className="text-xs text-stone-500">Founder DB</div>
           </div>
         </div>

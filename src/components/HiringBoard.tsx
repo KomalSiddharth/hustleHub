@@ -158,7 +158,7 @@ export default function HiringBoard() {
   };
 
   const handleShare = (job: JobPost) => {
-    const textToCopy = `Hustle Hub Hiring: ${job.roleTitle} at ${job.companyName}`;
+    const textToCopy = `The Founder's Club Hiring: ${job.roleTitle} at ${job.companyName}`;
     navigator.clipboard.writeText(textToCopy);
     setCopiedNotification(job.id);
     setTimeout(() => setCopiedNotification(null), 2000);

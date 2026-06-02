@@ -18,7 +18,12 @@ import {
   deleteTableFromStore,
   saveSessionToStore,
   getActiveFirestore,
+  getActiveAuth,
+  getUserProfile,
+  onAuthStateChanged,
+  signOut,
 } from "./lib/firebaseSync";
+import type { User } from "firebase/auth";
 
 // Components
 import Sidebar from "./components/Sidebar";
@@ -62,27 +67,59 @@ export default function App() {
     return localStorage.getItem("hustle_hub_logged_name") || "";
   });
 
+  const [sessionEmail, setSessionEmail] = useState<string>(() => {
+    const savedProfile = localStorage.getItem("hustle_hub_profile");
+    if (savedProfile) {
+      try {
+        const parsed = JSON.parse(savedProfile);
+        return String(parsed["Email"] || "");
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  });
+
   const handleSetSessionName = (val: string) => {
     setSessionName(val);
     if (val) {
       localStorage.setItem("hustle_hub_logged_name", val);
+      // Also update email if it was just saved in profile
+      const savedProfile = localStorage.getItem("hustle_hub_profile");
+      if (savedProfile) {
+        try {
+          const parsed = JSON.parse(savedProfile);
+          if (parsed["Email"]) setSessionEmail(parsed["Email"]);
+        } catch {}
+      }
     } else {
       localStorage.removeItem("hustle_hub_logged_name");
     }
   };
 
-  // App Master View Mode: "landing" (The Hustle Hub home) OR "database" (Worksheets)
+  // Auth state
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const initialAuthCheckRef = useRef(true);
+
+  // App Master View Mode
   const [view, setView] = useState<"landing" | "database">("landing");
 
-  // Admin access control state
+  const ADMIN_EMAIL = "komalsiddharth814@gmail.com";
+
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    return localStorage.getItem("founder_hub_is_admin") === "true";
+    try {
+      const p = JSON.parse(localStorage.getItem("hustle_hub_profile") || "{}");
+      return String(p["Email"] || "").toLowerCase() === ADMIN_EMAIL;
+    } catch { return false; }
   });
 
-  const handleToggleAdmin = (val: boolean) => {
-    setIsAdmin(val);
-    localStorage.setItem("founder_hub_is_admin", String(val));
-  };
+  useEffect(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem("hustle_hub_profile") || "{}");
+      setIsAdmin(String(p["Email"] || "").toLowerCase() === ADMIN_EMAIL);
+    } catch { setIsAdmin(false); }
+  }, [sessionName]);
 
   // Content state
   const [tables, setTables] = useState<Table[]>([]);
@@ -317,7 +354,54 @@ export default function App() {
     };
   }, [firebaseConfig]);
 
-  // --- 3. PERSISTENCE WRAPER CORES ---
+  // --- 3. FIREBASE AUTH LISTENER ---
+  useEffect(() => {
+    const auth = getActiveAuth();
+    if (!auth) {
+      setAuthLoading(false);
+      return;
+    }
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        const profile = await getUserProfile(user.uid);
+        if (profile) {
+          localStorage.setItem("hustle_hub_profile", JSON.stringify(profile));
+          handleSetSessionName(profile["Name"] || "");
+        }
+        setIsAdmin(String(user.email || "").toLowerCase() === ADMIN_EMAIL);
+        // On initial page load with existing session → go straight to DB
+        if (initialAuthCheckRef.current) {
+          setView("database");
+        }
+      } else {
+        setIsAdmin(false);
+        setView("landing");
+        localStorage.removeItem("hustle_hub_profile");
+        handleSetSessionName("");
+      }
+      initialAuthCheckRef.current = false;
+      setAuthLoading(false);
+    });
+    return () => unsub();
+  }, [isFirebaseConnected]);
+
+  const handleSignOut = async () => {
+    const auth = getActiveAuth();
+    if (auth) {
+      try { await signOut(auth); } catch {}
+    }
+  };
+
+  // Only let authenticated users open the DB
+  const handleGoToDatabase = () => {
+    if (currentUser) {
+      setView("database");
+    }
+    // If not authed, LandingPage scrolls to the auth form — nothing to do here
+  };
+
+  // --- 4. PERSISTENCE WRAPER CORES ---
   const saveTable = async (updatedTable: Table) => {
     setTables((prev) => prev.map((t) => (t.id === updatedTable.id ? updatedTable : t)));
     await saveTableToStore(updatedTable, isFirebaseConnected);
@@ -381,7 +465,7 @@ export default function App() {
         {
           id: "m_def_" + activeT.id,
           role: "assistant",
-          content: `Hi! I am the **The Hustle Hub** Grounded Scout Agent. Ask me to query, summarize, or evaluate records from **"${activeT.name}"**!`,
+          content: `Hi! I am the **The Founder's Club** Grounded Scout Agent. Ask me to query, summarize, or evaluate records from **"${activeT.name}"**!`,
           timestamp: new Date().toISOString(),
         },
       ],
@@ -524,11 +608,15 @@ export default function App() {
     <div className="flex bg-[#fbfcfd] min-h-screen h-screen overflow-hidden font-sans antialiased text-slate-800">
       {view === "landing" ? (
         <LandingPage
-          onGoToDatabase={() => setView("database")}
+          onGoToDatabase={handleGoToDatabase}
           tables={tables}
           products={allProducts}
           communityMessages={allCommunityMessages}
           jobs={allJobs}
+          sessionName={sessionName}
+          onSignOut={handleSignOut}
+          isAuthenticated={!!currentUser}
+          authLoading={authLoading}
           onRegisterSuccess={handleSetSessionName}
           onAddRowToTable={async (tableId, freshRow) => {
             const trg = tables.find((x) => x.id === tableId);
@@ -630,78 +718,22 @@ export default function App() {
                 </div>
               </div>
             ) : activeTable ? (
-              <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-                {/* Chat Toggle Button (when closed) */}
-                {!isChatOpen && (
-                  <button 
-                    onClick={toggleChat}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-white border border-slate-200 p-1.5 rounded-r-xl shadow-md hover:bg-slate-50 text-slate-400 hover:text-indigo-600 transition-all"
-                    title="Open Chat"
-                  >
-                    <ChevronRight className="w-4 h-4" />
+              <div className="flex-1 flex flex-col overflow-hidden bg-white">
+                <div className="px-6 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-mono font-bold uppercase tracking-wider text-slate-550 select-none shrink-0">
+                  <span className="flex items-center gap-2 text-xs text-slate-600 font-bold truncate">
+                    <Database className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="truncate">{activeTable.name} / Spreadsheet</span>
+                    {isAdmin && (
+                      <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full ml-1">ADMIN</span>
+                    )}
+                  </span>
+                  <button onClick={() => setView("landing")} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg cursor-pointer transition-all active:scale-95">
+                    <Home className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="hidden sm:inline">Home</span>
                   </button>
-                )}
-
-                {/* Resizable Chat Sidebar */}
-                {isChatOpen && (
-                  <div 
-                    className="hidden lg:flex shrink-0 h-full border-r border-slate-200 overflow-hidden relative group"
-                    style={{ width: chatSidebarWidth }}
-                  >
-                    <ChatAssistant 
-                      session={activeSession} 
-                      table={activeTable} 
-                      onSendMessage={handleSendMessage} 
-                      isGenerating={isGeneratingChat} 
-                      onClearHistory={handleClearHistory} 
-                    />
-                    
-                    {/* Resize Handle */}
-                    <div
-                      onMouseDown={startResizingChat}
-                      className="absolute right-0 top-0 bottom-0 w-1.5 cursor-col-resize hover:bg-indigo-500/30 transition-colors z-10"
-                    >
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-8 bg-white border border-slate-200 rounded-l-lg -mr-0.5 flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="w-0.5 h-3 bg-slate-300 rounded-full mx-0.5" />
-                        <div className="w-0.5 h-3 bg-slate-300 rounded-full mx-0.5" />
-                      </div>
-                    </div>
-
-                    {/* Chat Close Button */}
-                    <button 
-                      onClick={toggleChat}
-                      className="absolute top-4 right-4 z-20 p-1.5 bg-white/80 backdrop-blur rounded-lg border border-slate-200 text-slate-400 hover:text-rose-500 transition-all opacity-0 group-hover:opacity-100"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-
-                <div className="flex-1 flex flex-col overflow-hidden bg-white">
-                  <div className="px-6 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs font-mono font-bold uppercase tracking-wider text-slate-550 select-none">
-                    <div className="flex items-center gap-4">
-                      <span className="flex items-center gap-2 text-xs text-slate-600 font-bold truncate">
-                        <Database className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="truncate">{activeTable.name} / Spreadsheet</span>
-                      </span>
-                      {isChatOpen && (
-                        <button 
-                          onClick={toggleChat}
-                          className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-200 text-slate-400 transition-colors"
-                        >
-                          <ChevronLeft className="w-3 h-3" />
-                          <span className="text-[10px]">Hide Chat</span>
-                        </button>
-                      )}
-                    </div>
-                    <button onClick={() => setView("landing")} className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 px-3 py-1.5 rounded-lg cursor-pointer transition-all active:scale-95">
-                      <Home className="w-3.5 h-3.5 text-indigo-400" />
-                      <span className="hidden sm:inline">Home</span>
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-hidden flex flex-col">
-                    <SpreadsheetTable table={activeTable} onUpdateTable={saveTable} allTables={tables} />
-                  </div>
+                </div>
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  <SpreadsheetTable table={activeTable} onUpdateTable={saveTable} allTables={tables} isAdmin={isAdmin} />
                 </div>
               </div>
             ) : (
