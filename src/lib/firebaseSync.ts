@@ -54,6 +54,28 @@ let activeApp: ReturnType<typeof initializeApp> | null = null;
 let activeDb: Firestore | null = null;
 let activeAuth: ReturnType<typeof getAuth> | null = null;
 
+// Auto-initialize from env vars at module load so auth is available immediately
+(function autoInitFromEnv() {
+  try {
+    const env = (import.meta as any).env || {};
+    if (!env.VITE_FIREBASE_API_KEY) return;
+    const existing = getApps().find((a) => a.name === "personal-firebase");
+    const app = existing ?? initializeApp({
+      apiKey: env.VITE_FIREBASE_API_KEY,
+      authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: env.VITE_FIREBASE_APP_ID,
+    }, "personal-firebase");
+    activeApp = app;
+    activeAuth = getAuth(app);
+    activeDb = getFirestore(app);
+  } catch (e) {
+    console.warn("Firebase auto-init from env failed:", e);
+  }
+})();
+
 // Error handler specified by the Firebase Integration Skill
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const currentAuth = activeApp ? getAuth(activeApp) : null;
