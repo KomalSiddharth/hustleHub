@@ -125,6 +125,7 @@ export async function initializeDynamicFirebase(config: SavedFirebaseConfig): Pr
     console.error("Firebase dynamic initialization failed:", err);
     activeApp = null;
     activeDb = null;
+    activeAuth = null;
     throw err;
   }
 }
@@ -134,6 +135,28 @@ export function getActiveFirestore(): Firestore | null {
 }
 
 export function getActiveAuth() {
+  if (!activeAuth) {
+    // Lazy fallback: try env vars if auth was never set or got cleared
+    try {
+      const env = (import.meta as any).env || {};
+      if (env.VITE_FIREBASE_API_KEY) {
+        const existing = getApps().find((a) => a.name === "personal-firebase");
+        const app = existing ?? initializeApp({
+          apiKey: env.VITE_FIREBASE_API_KEY,
+          authDomain: env.VITE_FIREBASE_AUTH_DOMAIN,
+          projectId: env.VITE_FIREBASE_PROJECT_ID,
+          storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET,
+          messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+          appId: env.VITE_FIREBASE_APP_ID,
+        }, "personal-firebase");
+        activeApp = app;
+        activeAuth = getAuth(app);
+        if (!activeDb) activeDb = getFirestore(app);
+      }
+    } catch (e) {
+      console.warn("Firebase lazy-init in getActiveAuth failed:", e);
+    }
+  }
   return activeAuth;
 }
 
