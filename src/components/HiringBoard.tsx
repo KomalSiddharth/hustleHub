@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Briefcase, Heart, MessageSquare, Plus, Share2, MapPin, DollarSign, Calendar, Filter, ArrowUpDown, Send, Search } from "lucide-react";
 import { saveAppStateToStore, getActiveFirestore, getActiveAuth } from "../lib/firebaseSync";
+import { onAuthStateChanged } from "firebase/auth";
 import { onSnapshot, doc } from "firebase/firestore";
 
 export interface JobPost {
@@ -31,7 +32,20 @@ const DEFAULT_JOBS: JobPost[] = [];
 export default function HiringBoard() {
   const [jobs, setJobs] = useState<JobPost[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const uid = getActiveAuth()?.currentUser?.uid || "anon_" + (localStorage.getItem("hustle_hub_logged_name") || "user");
+  const [uid, setUid] = useState<string>(() => {
+    const currentUid = getActiveAuth()?.currentUser?.uid;
+    return currentUid || "anon_" + (localStorage.getItem("hustle_hub_logged_name") || "user");
+  });
+
+  useEffect(() => {
+    const auth = getActiveAuth();
+    if (!auth) return;
+    if (auth.currentUser?.uid) setUid(auth.currentUser.uid);
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user?.uid) setUid(user.uid);
+    });
+    return unsub;
+  }, []);
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
 

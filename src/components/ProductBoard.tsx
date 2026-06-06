@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { ArrowUp, ArrowDown, MessageSquare, Plus, ExternalLink, Send, User, TrendingUp, Trophy, Crown, Award, ImagePlus, X } from "lucide-react";
 import { saveAppStateToStore, getActiveFirestore, getActiveAuth } from "../lib/firebaseSync";
 import { onSnapshot, doc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 export interface Product {
   id: string;
@@ -39,7 +40,23 @@ export default function ProductBoard() {
   const [commentToast, setCommentToast] = useState<string | null>(null);
   const prevProductsRef = useRef<Product[]>([]);
 
-  const uid = getActiveAuth()?.currentUser?.uid || "anon_" + (localStorage.getItem("hustle_hub_logged_name") || "user");
+  // uid must be reactive — auth may not be loaded at component mount time
+  const [uid, setUid] = useState<string>(() => {
+    const currentUid = getActiveAuth()?.currentUser?.uid;
+    return currentUid || "anon_" + (localStorage.getItem("hustle_hub_logged_name") || "user");
+  });
+
+  useEffect(() => {
+    const auth = getActiveAuth();
+    if (!auth) return;
+    // Immediately update if already signed in
+    if (auth.currentUser?.uid) setUid(auth.currentUser.uid);
+    // Also listen for auth state changes
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user?.uid) setUid(user.uid);
+    });
+    return unsub;
+  }, []);
 
   const currentUserName = (() => {
     try {
