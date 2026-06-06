@@ -634,11 +634,11 @@ export default function LandingPage({
             transition={{ duration: 0.5 }}
             className="mb-10 text-center"
           >
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-400">See it in action</p>
-            <h2 className="mt-2 text-4xl font-black tracking-[-0.04em] text-white">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">See it in action</p>
+            <h2 className="mt-2 text-4xl font-black tracking-[-0.04em] text-stone-950">
               Every tool your founder journey needs
             </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-white/60">
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-stone-500">
               One platform to find collaborators, share what you ship, hire talent, and have the right conversations — all connected through a verified founder identity.
             </p>
           </motion.div>
