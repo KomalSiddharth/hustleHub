@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Sparkles,
   Plus,
@@ -22,6 +22,7 @@ import {
   Globe,
 } from "lucide-react";
 import type { Table, Column, ColumnType } from "../types";
+import FounderProfileModal from "./FounderProfileModal";
 
 
 interface Props {
@@ -37,8 +38,13 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable,
   const [experienceFilter, setExperienceFilter] = useState(""); // filter by minimum experience
   const [revenueFilter, setRevenueFilter] = useState("all"); // Filter options: "all", "yes", "no"
 
+  // Pagination
+  const PAGE_SIZE = 25;
+  const [currentPage, setCurrentPage] = useState(1);
+
   // Selected row for full details pane on the right
   const [selectedRow, setSelectedRow] = useState<Record<string, any> | null>(null);
+  const [profileModalRow, setProfileModalRow] = useState<Record<string, any> | null>(null);
   const [selectedFieldName, setSelectedFieldName] = useState<string | null>(null);
 
   // Column creation popover / helper states
@@ -438,6 +444,14 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable,
     return true;
   });
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [textFilter, experienceFilter, revenueFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const paginatedRows = filteredRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   // Bidirectional synchronisation of values edited inside the right detail drawer
   const handleDrawerValueChange = (colName: string, newValue: any) => {
     if (!selectedRow) return;
@@ -754,7 +768,7 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable,
 
             {/* Table Body rows */}
             <tbody>
-              {filteredRows.map((rowRecord, rIndex) => {
+              {paginatedRows.map((rowRecord, rIndex) => {
                 const isSelected = selectedRow?.id === rowRecord.id;
 
                 return (
@@ -766,7 +780,7 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable,
                   >
                     {/* Index row */}
                     <td className="w-12 text-center text-slate-400 font-mono font-normal border-r border-slate-100 bg-slate-50/20 relative group">
-                      <span className="group-hover:hidden">{rIndex + 1}</span>
+                      <span className="group-hover:hidden">{(currentPage - 1) * PAGE_SIZE + rIndex + 1}</span>
                       {isAdmin && (
                         <button
                           onClick={() => handleDeleteRow(rIndex)}
@@ -918,6 +932,32 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable,
               )}
             </tbody>
           </table>
+
+          {/* Pagination Controls */}
+          {filteredRows.length > PAGE_SIZE && (
+            <div className="py-3 border-t border-slate-100 flex items-center justify-center gap-4 shrink-0 bg-white">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                ← Prev
+              </button>
+              <span className="text-xs font-semibold text-slate-600">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next →
+              </button>
+              <span className="text-[10px] text-slate-400 font-medium">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredRows.length)} of {filteredRows.length} founders
+              </span>
+            </div>
+          )}
 
           {/* Table Footer triggers */}
           {isAdmin && (
@@ -1111,21 +1151,30 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable,
             </div>
 
             {/* Active sync indicator footer in drawer */}
-            <div className="mt-4 pt-4 border-t border-slate-200 text-center flex items-center justify-between text-[10px] text-slate-500 font-mono shrink-0">
-              <span className="flex items-center gap-1.5 text-emerald-600 font-semibold">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>Synchronised Live</span>
-              </span>
+            <div className="mt-4 pt-4 border-t border-slate-200 shrink-0 space-y-2">
               <button
                 type="button"
-                onClick={() => {
-                  setSelectedRow(null);
-                  setSelectedFieldName(null);
-                }}
-                className="text-indigo-600 hover:text-indigo-700 font-bold hover:underline"
+                onClick={() => setProfileModalRow(selectedRow)}
+                className="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors"
               >
-                Done
+                View Full Profile
               </button>
+              <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                <span className="flex items-center gap-1.5 text-emerald-600 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <span>Synchronised Live</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRow(null);
+                    setSelectedFieldName(null);
+                  }}
+                  className="text-indigo-600 hover:text-indigo-700 font-bold hover:underline"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1183,6 +1232,8 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable,
           </div>
         </div>
       )}
+
+      <FounderProfileModal profile={profileModalRow} onClose={() => setProfileModalRow(null)} />
     </div>
   );
 }

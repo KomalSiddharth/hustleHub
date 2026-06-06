@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ArrowUp, ArrowDown, MessageSquare, Plus, ExternalLink, Send, User, TrendingUp, Trophy, Crown, Award, ImagePlus, X } from "lucide-react";
-import { saveAppStateToStore, getActiveFirestore } from "../lib/firebaseSync";
+import { saveAppStateToStore, getActiveFirestore, getActiveAuth } from "../lib/firebaseSync";
 import { onSnapshot, doc } from "firebase/firestore";
 
 export interface Product {
@@ -14,7 +14,8 @@ export interface Product {
   imageUrl?: string;
   upvotes: number;
   downvotes: number;
-  userVoted?: "up" | "down" | null;
+  votes?: Record<string, "up" | "down">; // per-user votes map
+  userVoted?: "up" | "down" | null; // legacy field, no longer written
   comments: Comment[];
   createdAt: string;
 }
@@ -23,6 +24,7 @@ export interface Comment {
   id: string;
   author: string;
   authorRole: string;
+  authorUid?: string;
   text: string;
   timestamp: string;
 }
@@ -36,6 +38,8 @@ export default function ProductBoard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [commentToast, setCommentToast] = useState<string | null>(null);
   const prevProductsRef = useRef<Product[]>([]);
+
+  const uid = getActiveAuth()?.currentUser?.uid || "anon_" + (localStorage.getItem("hustle_hub_logged_name") || "user");
 
   const currentUserName = (() => {
     try {
@@ -153,7 +157,7 @@ export default function ProductBoard() {
       imageUrl: imagePreview || imageUrl.trim() || undefined,
       upvotes: 1,
       downvotes: 0,
-      userVoted: "up",
+      votes: { [uid]: "up" },
       createdAt: new Date().toISOString().split("T")[0],
       comments: []
     };
@@ -171,25 +175,21 @@ export default function ProductBoard() {
   const handleVote = (productId: string, voteType: "up" | "down") => {
     const modified = products.map((p) => {
       if (p.id !== productId) return p;
-      let upDiff = 0;
-      let downDiff = 0;
-      let nextVotedState: "up" | "down" | null = voteType;
-      if (p.userVoted === voteType) {
-        if (voteType === "up") upDiff = -1;
-        if (voteType === "down") downDiff = -1;
-        nextVotedState = null;
+      const currentVotes: Record<string, "up" | "down"> = { ...(p.votes || {}) };
+      const currentUserVote = currentVotes[uid] ?? null;
+
+      if (currentUserVote === voteType) {
+        // toggle off
+        delete currentVotes[uid];
       } else {
-        if (p.userVoted === "up") upDiff = -1;
-        if (p.userVoted === "down") downDiff = -1;
-        if (voteType === "up") upDiff += 1;
-        if (voteType === "down") downDiff += 1;
+        currentVotes[uid] = voteType;
       }
-      return {
-        ...p,
-        upvotes: Math.max(0, p.upvotes + upDiff),
-        downvotes: Math.max(0, p.downvotes + downDiff),
-        userVoted: nextVotedState
-      };
+
+      // Recompute upvotes/downvotes from the votes map
+      const upvotes = Object.values(currentVotes).filter((v) => v === "up").length;
+      const downvotes = Object.values(currentVotes).filter((v) => v === "down").length;
+
+      return { ...p, votes: currentVotes, upvotes, downvotes };
     });
     saveProducts(modified);
   };
@@ -207,6 +207,7 @@ export default function ProductBoard() {
       id: "comment_" + Date.now(),
       author: authorName,
       authorRole: profile.role,
+      authorUid: uid,
       text: newCommentText.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
@@ -347,7 +348,9 @@ export default function ProductBoard() {
                 <p className="text-slate-400 font-medium">No products launched yet. Be the first!</p>
               </div>
             )}
-            {products.map((p) => (
+            {products.map((p) => {
+              const userVoted = p.votes?.[uid] ?? p.userVoted ?? null;
+              return (
               <div key={p.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden hover:shadow-md transition-shadow">
                 {p.imageUrl && (
                   <div className="w-full h-48 overflow-hidden bg-slate-100">
@@ -356,9 +359,9 @@ export default function ProductBoard() {
                 )}
                 <div className="p-6 flex items-start gap-6">
                   <div className="flex flex-col items-center gap-1 bg-slate-50 rounded-2xl p-2 border border-slate-100 min-w-[64px]">
-                    <button onClick={() => handleVote(p.id, "up")} className={`p-1.5 rounded-xl transition-colors ${p.userVoted === "up" ? "bg-emerald-100 text-emerald-600" : "hover:bg-white text-slate-400"}`}><ArrowUp className="w-6 h-6" /></button>
+                    <button onClick={() => handleVote(p.id, "up")} className={`p-1.5 rounded-xl transition-colors ${userVoted === "up" ? "bg-emerald-100 text-emerald-600" : "hover:bg-white text-slate-400"}`}><ArrowUp className="w-6 h-6" /></button>
                     <span className="font-black text-lg">{p.upvotes - p.downvotes}</span>
-                    <button onClick={() => handleVote(p.id, "down")} className={`p-1.5 rounded-xl transition-colors ${p.userVoted === "down" ? "bg-rose-100 text-rose-600" : "hover:bg-white text-slate-400"}`}><ArrowDown className="w-6 h-6" /></button>
+                    <button onClick={() => handleVote(p.id, "down")} className={`p-1.5 rounded-xl transition-colors ${userVoted === "down" ? "bg-rose-100 text-rose-600" : "hover:bg-white text-slate-400"}`}><ArrowDown className="w-6 h-6" /></button>
                   </div>
                   <div className="flex-1 space-y-2">
                     <div className="flex items-center justify-between">
@@ -375,13 +378,16 @@ export default function ProductBoard() {
                 </div>
 
                 <div className="bg-slate-50/50 border-t border-slate-100 px-6 py-4">
-                  <button
-                    onClick={() => setExpandedFeedbackId(expandedFeedbackId === p.id ? null : p.id)}
-                    className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    {p.comments.length} Comments
-                  </button>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => setExpandedFeedbackId(expandedFeedbackId === p.id ? null : p.id)}
+                      className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      {p.comments.length} Comments
+                    </button>
+                    <span className="text-xs text-slate-400">❤️ {p.upvotes} likes</span>
+                  </div>
 
                   {expandedFeedbackId === p.id && (
                     <div className="mt-6 space-y-6 animate-in fade-in duration-300">
@@ -411,7 +417,7 @@ export default function ProductBoard() {
                   )}
                 </div>
               </div>
-            ))}
+            );})}
           </div>
 
           <aside className="space-y-6 sticky top-24">
