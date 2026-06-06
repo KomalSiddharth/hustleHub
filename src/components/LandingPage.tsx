@@ -446,30 +446,30 @@ export default function LandingPage({
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12 }}
-            className="rounded-[28px] border border-white/15 bg-white/10 p-4 shadow-2xl shadow-stone-950/20 backdrop-blur-xl md:p-6 min-h-[520px] flex flex-col justify-start"
+            className="rounded-[28px] border border-white/50 bg-white/88 p-4 shadow-2xl shadow-stone-950/20 backdrop-blur-xl md:p-6 min-h-[520px] flex flex-col justify-start"
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-400">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
                   {savedProfile ? "Your Profile" : "Join the community"}
                 </p>
-                <h2 className="mt-1 text-2xl font-black tracking-tight text-white">
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-stone-950">
                   {savedProfile ? "Welcome back" : "Founder profile"}
                 </h2>
                 {!savedProfile && (
-                  <p className="mt-2 max-w-xl text-sm leading-6 text-white/60">
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
                     Create your account and get routed into the right founder track automatically.
                   </p>
                 )}
               </div>
-              <div className="hidden rounded-2xl bg-white/10 border border-white/15 p-3 text-white sm:block">
+              <div className="hidden rounded-2xl bg-stone-950 p-3 text-white sm:block">
                 <Layers className="h-5 w-5" />
               </div>
             </div>
 
             {/* Auth mode tabs — only shown when not logged in */}
             {!savedProfile && (
-              <div className="mb-5 flex rounded-xl border border-white/15 bg-white/10 p-1">
+              <div className="mb-5 flex rounded-xl border border-stone-200 bg-stone-100/60 p-1">
                 {(["register", "login"] as const).map((mode) => (
                   <button
                     key={mode}
@@ -478,7 +478,7 @@ export default function LandingPage({
                     className={`flex-1 rounded-lg py-2 text-xs font-black transition ${
                       authMode === mode
                         ? "bg-white text-stone-950 shadow-sm"
-                        : "text-white/50 hover:text-white"
+                        : "text-stone-400 hover:text-stone-600"
                     }`}
                   >
                     {mode === "register" ? "Create Account" : "Sign In"}
@@ -566,9 +566,9 @@ export default function LandingPage({
                   {isLoginLoading ? "Signing in..." : "Sign in with email"}
                   <ArrowRight className="h-4 w-4" />
                 </button>
-                <p className="text-center text-xs text-white/50">
+                <p className="text-center text-xs text-stone-400">
                   New here?{" "}
-                  <button type="button" onClick={() => setAuthMode("register")} className="font-bold text-emerald-400 hover:underline">
+                  <button type="button" onClick={() => setAuthMode("register")} className="font-bold text-emerald-700 hover:underline">
                     Create an account
                   </button>
                 </p>
@@ -1429,17 +1429,17 @@ function Field({
 }) {
   return (
     <label className="block text-left">
-      <span className="mb-1.5 block text-[11px] font-bold text-white/70">
-        {label} {required && <span className="text-emerald-400">*</span>}
+      <span className="mb-1.5 block text-[11px] font-bold text-stone-500">
+        {label} {required && <span className="text-emerald-700">*</span>}
       </span>
       <div className="relative">
-        {Icon && <Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />}
+        {Icon && <Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />}
         <input
           type={type}
           required={required}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className={`h-10 w-full rounded-xl border border-white/20 bg-white/10 px-3 text-sm text-white placeholder-white/30 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/20 ${Icon ? "pl-9" : ""}`}
+          className={`h-10 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm text-stone-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 ${Icon ? "pl-9" : ""}`}
         />
       </div>
     </label>
@@ -1459,11 +1459,11 @@ function SelectField({
 }) {
   return (
     <label className="block text-left">
-      <span className="mb-1.5 block text-[11px] font-bold text-white/70">{label}</span>
+      <span className="mb-1.5 block text-[11px] font-bold text-stone-500">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-xl border border-white/20 bg-white/10 px-3 text-sm font-semibold text-white outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/20"
+        className="h-10 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
       >
         {options.map((option) => (
           <option key={option} value={option}>
@@ -1490,15 +1490,15 @@ function TextArea({
 }) {
   return (
     <label className="block text-left">
-      <span className="mb-1.5 block text-[11px] font-bold text-white/70">
-        {label} {required && <span className="text-emerald-400">*</span>}
+      <span className="mb-1.5 block text-[11px] font-bold text-stone-500">
+        {label} {required && <span className="text-emerald-700">*</span>}
       </span>
       <textarea
         required={required}
         rows={rows}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-none rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm text-white placeholder-white/30 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/20"
+        className="w-full resize-none rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
       />
     </label>
   );
@@ -1520,8 +1520,8 @@ function PasswordField({
   const [show, setShow] = useState(false);
   return (
     <label className="block text-left">
-      <span className="mb-1.5 block text-[11px] font-bold text-white/70">
-        {label} {required && <span className="text-emerald-400">*</span>}
+      <span className="mb-1.5 block text-[11px] font-bold text-stone-500">
+        {label} {required && <span className="text-emerald-700">*</span>}
       </span>
       <div className="relative">
         <input
@@ -1530,17 +1530,17 @@ function PasswordField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           minLength={6}
-          className="h-10 w-full rounded-xl border border-white/20 bg-white/10 px-3 pr-10 text-sm text-white placeholder-white/30 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-400/20"
+          className="h-10 w-full rounded-xl border border-stone-200 bg-white px-3 pr-10 text-sm text-stone-950 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
         />
         <button
           type="button"
           onClick={() => setShow((v) => !v)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/50 hover:text-white"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-stone-400 hover:text-stone-700"
         >
           {show ? "Hide" : "Show"}
         </button>
       </div>
-      {hint && <p className="mt-1 text-[10px] text-white/40">{hint}</p>}
+      {hint && <p className="mt-1 text-[10px] text-stone-400">{hint}</p>}
     </label>
   );
 }
