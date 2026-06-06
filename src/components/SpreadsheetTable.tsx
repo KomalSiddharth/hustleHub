@@ -561,6 +561,32 @@ export default function SpreadsheetTable({ table, allTables = [], onUpdateTable,
         </div>
       </div>
 
+      {/* Non-admin universal search bar */}
+      {!isAdmin && (
+        <div className="bg-white border border-slate-200/90 rounded-xl px-3.5 py-2.5 shadow-2xs flex items-center gap-3 shrink-0">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-3.5 h-3.5" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search founders, niches, companies..."
+              value={textFilter}
+              onChange={(e) => setTextFilter(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-400 focus:bg-white rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-hidden focus:ring-1 focus:ring-indigo-500 text-slate-700 transition-colors"
+            />
+          </div>
+          {textFilter && (
+            <button
+              onClick={() => setTextFilter("")}
+              className="text-[10px] font-bold text-rose-500 hover:underline px-2 py-1 cursor-pointer"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* --- SHEET FILTER CONTROLS BAR --- */}
       {isAdmin && (
         <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 shadow-2xs flex flex-wrap gap-4 items-center shrink-0">

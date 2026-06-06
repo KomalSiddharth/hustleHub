@@ -34,6 +34,15 @@ export default function ProductBoard() {
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [expandedFeedbackId, setExpandedFeedbackId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [commentToast, setCommentToast] = useState<string | null>(null);
+  const prevProductsRef = useRef<Product[]>([]);
+
+  const currentUserName = (() => {
+    try {
+      const p = JSON.parse(localStorage.getItem("hustle_hub_profile") || "{}");
+      return String(p["Name"] || "");
+    } catch { return ""; }
+  })();
 
   // Form states
   const [name, setName] = useState("");
@@ -92,10 +101,33 @@ export default function ProductBoard() {
     return () => unsub();
   }, []);
 
+  // Detect new comments on user's products and show a toast
+  useEffect(() => {
+    if (!currentUserName || prevProductsRef.current.length === 0) {
+      prevProductsRef.current = products;
+      return;
+    }
+    for (const p of products) {
+      if (p.makerName !== currentUserName) continue;
+      const prev = prevProductsRef.current.find((x) => x.id === p.id);
+      if (prev && p.comments.length > prev.comments.length) {
+        setCommentToast(p.name);
+        // Update the seen count in localStorage
+        localStorage.setItem("hustle_hub_products_seen_count", String(products.reduce((s, x) => s + x.comments.length, 0)));
+        setTimeout(() => setCommentToast(null), 4000);
+        break;
+      }
+    }
+    prevProductsRef.current = products;
+  }, [products]);
+
   const saveProducts = (newProducts: Product[]) => {
     setProducts(newProducts);
     localStorage.setItem("hustle_hub_products", JSON.stringify(newProducts));
     void saveAppStateToStore("products", newProducts);
+    // Update seen count whenever user saves (they're active)
+    const total = newProducts.reduce((s, p) => s + p.comments.length, 0);
+    localStorage.setItem("hustle_hub_products_seen_count", String(total));
   };
 
   const handleSubmitProduct = (e: React.FormEvent) => {
@@ -429,6 +461,14 @@ export default function ProductBoard() {
           </aside>
         </div>
       </div>
+
+      {/* Comment toast notification */}
+      {commentToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 px-5 py-3.5 shadow-2xl text-white text-sm font-bold animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <span className="text-lg">💬</span>
+          New comment on <span className="text-emerald-400">{commentToast}</span>!
+        </div>
+      )}
     </div>
   );
 }

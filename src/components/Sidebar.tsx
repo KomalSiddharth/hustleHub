@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Briefcase, Database, MessageCircle, Rocket, X } from "lucide-react";
 import type { Table } from "../types";
 
@@ -15,10 +15,22 @@ export default function Sidebar({ tables, activeTableId, onSelectTable, sessionN
   const displayName = savedProfile?.["Name"] || sessionName || "Founder";
   const email = savedProfile?.["Email"] || savedProfile?.["Persona"] || "Member profile";
 
+  // Compute unread product comments badge
+  const hasUnreadComments = useMemo(() => {
+    try {
+      const saved = localStorage.getItem("hustle_hub_products");
+      if (!saved) return false;
+      const products: any[] = JSON.parse(saved);
+      const total = products.reduce((s: number, p: any) => s + (p.comments?.length || 0), 0);
+      const seen = parseInt(localStorage.getItem("hustle_hub_products_seen_count") || "0", 10);
+      return total > seen;
+    } catch { return false; }
+  }, [activeTableId]);
+
   const workspaceTabs = [
-    { id: "spotlight", label: "Products", icon: Rocket },
-    { id: "gigs", label: "Hiring", icon: Briefcase },
-    { id: "whatsapp", label: "Community", icon: MessageCircle },
+    { id: "spotlight", label: "Products", icon: Rocket, badge: hasUnreadComments },
+    { id: "gigs", label: "Hiring", icon: Briefcase, badge: false },
+    { id: "whatsapp", label: "Community", icon: MessageCircle, badge: false },
   ];
 
   return (
@@ -69,7 +81,12 @@ export default function Sidebar({ tables, activeTableId, onSelectTable, sessionN
                 activeTableId === tab.id ? "bg-emerald-500 text-slate-950 shadow-sm" : "text-slate-300 hover:bg-slate-900"
               }`}
             >
-              <tab.icon className="h-4 w-4" />
+              <div className="relative">
+                <tab.icon className="h-4 w-4" />
+                {tab.badge && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-rose-500 ring-1 ring-slate-950" />
+                )}
+              </div>
               {tab.label}
             </button>
           ))}

@@ -34,6 +34,7 @@ import FirebaseSettingsModal from "./components/FirebaseSettingsModal";
 import ProductBoard from "./components/ProductBoard";
 import HiringBoard from "./components/HiringBoard";
 import WhatsAppCommunity from "./components/WhatsAppCommunity";
+import OnboardingModal from "./components/OnboardingModal";
 
 export default function App() {
   // Config & Init State
@@ -41,6 +42,7 @@ export default function App() {
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Global Theme State
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -373,6 +375,10 @@ export default function App() {
         // On initial page load with existing session → go straight to DB
         if (initialAuthCheckRef.current) {
           setView("database");
+          // Show onboarding modal once for new users
+          if (!localStorage.getItem("hustle_hub_onboarded")) {
+            setShowOnboarding(true);
+          }
         }
       } else {
         setIsAdmin(false);
@@ -750,6 +756,14 @@ export default function App() {
       )}
 
       <FirebaseSettingsModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} config={firebaseConfig} onSave={handleSaveFirebaseConfig} />
+      {showOnboarding && (
+        <OnboardingModal
+          onClose={() => {
+            setShowOnboarding(false);
+            localStorage.setItem("hustle_hub_onboarded", "true");
+          }}
+        />
+      )}
     </div>
   );
 }

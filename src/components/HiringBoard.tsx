@@ -252,7 +252,7 @@ export default function HiringBoard() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-slate-50">
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-50">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-slate-400" />
               <div className="flex gap-1">
@@ -360,17 +360,17 @@ export default function HiringBoard() {
           {filteredJobs.map((j) => (
             <div key={j.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden hover:shadow-md transition-shadow">
               <div className="p-6 space-y-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex gap-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="flex gap-4 min-w-0">
                     <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0">
                       <Briefcase className="w-6 h-6" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h2 className="text-xl font-black">{j.roleTitle}</h2>
                       <p className="text-emerald-600 font-bold text-sm">{j.companyName}</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{j.createdAt}</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest shrink-0">{j.createdAt}</span>
                 </div>
 
                 <div className="flex flex-wrap gap-2">

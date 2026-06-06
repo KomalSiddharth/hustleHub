@@ -446,15 +446,15 @@ export default function LandingPage({
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12 }}
-            className="rounded-[28px] border border-white/50 bg-white/88 p-4 shadow-2xl shadow-stone-950/20 backdrop-blur-xl md:p-6 min-h-[520px] flex flex-col justify-start"
+            className="w-full rounded-[28px] border border-white/50 bg-white/88 p-4 shadow-2xl shadow-stone-950/20 backdrop-blur-xl md:p-6 min-h-[520px] flex flex-col justify-start"
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
-                  {savedProfile ? "Your Profile" : "Join the community"}
+                  {savedProfile && savedProfile["LinkedIn Profile"] && savedProfile["Contact Number"] ? "Your Profile" : savedProfile ? "Complete your profile" : "Join the community"}
                 </p>
                 <h2 className="mt-1 text-2xl font-black tracking-tight text-stone-950">
-                  {savedProfile ? "Welcome back" : "Founder profile"}
+                  {savedProfile && savedProfile["LinkedIn Profile"] && savedProfile["Contact Number"] ? "Welcome back" : savedProfile ? "Finish signing up" : "Founder profile"}
                 </h2>
                 {!savedProfile && (
                   <p className="mt-2 max-w-xl text-sm leading-6 text-stone-500">
@@ -487,7 +487,7 @@ export default function LandingPage({
               </div>
             )}
 
-            {savedProfile ? (
+            {savedProfile && savedProfile["LinkedIn Profile"] && savedProfile["Contact Number"] ? (
               <div className="space-y-5">
                 <div className="flex items-center gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                   <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-emerald-500 text-xl font-black text-white">
@@ -532,6 +532,16 @@ export default function LandingPage({
                   </button>
                 </div>
               </div>
+            ) : savedProfile && (!savedProfile["LinkedIn Profile"] || !savedProfile["Contact Number"]) ? (
+              <ProfileCompletionForm
+                savedProfile={savedProfile}
+                tables={tables}
+                onAddRowToTable={onAddRowToTable}
+                onRegisterSuccess={onRegisterSuccess}
+                onGoToDatabase={onGoToDatabase}
+                onSignOut={onSignOut}
+                setSavedProfile={setSavedProfile}
+              />
             ) : isSuccess ? (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center">
                 <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-500 text-white">
@@ -718,6 +728,97 @@ export default function LandingPage({
         </div>
       </footer>
     </div>
+  );
+}
+
+// ─── Profile Completion Form ─────────────────────────────────────────────────
+
+function ProfileCompletionForm({
+  savedProfile,
+  tables,
+  onAddRowToTable,
+  onRegisterSuccess,
+  onGoToDatabase,
+  onSignOut,
+  setSavedProfile,
+}: {
+  savedProfile: Record<string, any>;
+  tables: any[];
+  onAddRowToTable: (tableId: string, rowData: Record<string, any>) => void;
+  onRegisterSuccess: (name: string) => void;
+  onGoToDatabase: () => void;
+  onSignOut: () => void;
+  setSavedProfile: (p: Record<string, any>) => void;
+}) {
+  const [cpName, setCpName] = React.useState(savedProfile["Name"] || "");
+  const [cpContact, setCpContact] = React.useState(savedProfile["Contact Number"] || "");
+  const [cpLinkedin, setCpLinkedin] = React.useState(savedProfile["LinkedIn Profile"] || "");
+  const [cpPersona, setCpPersona] = React.useState(savedProfile["Persona"] || "Tech");
+  const [cpBio, setCpBio] = React.useState(savedProfile["Bio"] || "");
+  const [cpError, setCpError] = React.useState("");
+  const [cpSubmitting, setCpSubmitting] = React.useState(false);
+
+  const handleComplete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCpError("");
+    if (!cpContact.trim() || !cpLinkedin.trim()) {
+      setCpError("Contact Number and LinkedIn Profile are required.");
+      return;
+    }
+    setCpSubmitting(true);
+    const auth = getActiveAuth();
+    const uid = auth?.currentUser?.uid || savedProfile["uid"] || savedProfile["id"]?.replace("row_reg_", "") || "";
+    const targetTableId = routeByPersona[cpPersona] || "table_tech";
+    const targetTable = tables.find((t) => t.id === targetTableId) || tables[0];
+    const freshRow: Record<string, any> = {
+      ...savedProfile,
+      Name: cpName.trim() || savedProfile["Name"],
+      "Contact Number": cpContact.trim(),
+      "LinkedIn Profile": cpLinkedin.trim(),
+      Persona: cpPersona,
+      Bio: cpBio.trim(),
+    };
+    try {
+      await saveUserProfile(uid, freshRow);
+      localStorage.setItem("hustle_hub_profile", JSON.stringify(freshRow));
+      setSavedProfile(freshRow);
+      if (targetTable) onAddRowToTable(targetTable.id, freshRow);
+      onRegisterSuccess(freshRow["Name"] || "");
+      onGoToDatabase();
+    } catch (err: any) {
+      setCpError(err.message || "Failed to save profile. Please try again.");
+    } finally {
+      setCpSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleComplete} className="space-y-4">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800">
+        You're signed in via Google. Please complete your profile to join the directory.
+      </div>
+      <Field icon={User} label="Name" value={cpName} onChange={setCpName} />
+      <Field icon={Phone} label="Contact Number" required value={cpContact} onChange={setCpContact} />
+      <Field icon={Linkedin} label="LinkedIn Profile" required type="url" value={cpLinkedin} onChange={setCpLinkedin} />
+      <SelectField label="Persona" value={cpPersona} options={personaOptions} onChange={setCpPersona} />
+      <TextArea label="Bio (optional)" value={cpBio} onChange={setCpBio} rows={2} />
+      {cpError && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{cpError}</p>}
+      <button
+        type="submit"
+        disabled={cpSubmitting}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-stone-950 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:opacity-60"
+      >
+        {cpSubmitting ? "Saving..." : "Complete profile & join"}
+        <ArrowRight className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onSignOut}
+        className="w-full rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-500 transition hover:text-rose-600 hover:border-rose-200"
+      >
+        Sign out
+      </button>
+    </form>
   );
 }
 
