@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { ArrowUp, ArrowDown, MessageSquare, Plus, ExternalLink, Send, User, TrendingUp, Trophy, Crown, Award } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { ArrowUp, ArrowDown, MessageSquare, Plus, ExternalLink, Send, User, TrendingUp, Trophy, Crown, Award, ImagePlus, X } from "lucide-react";
 import { saveAppStateToStore, getActiveFirestore } from "../lib/firebaseSync";
 import { onSnapshot, doc } from "firebase/firestore";
 
@@ -11,6 +11,7 @@ export interface Product {
   makerName: string;
   makerRole: string; // Tech, Growth, Content
   url: string;
+  imageUrl?: string;
   upvotes: number;
   downvotes: number;
   userVoted?: "up" | "down" | null;
@@ -32,12 +33,15 @@ export default function ProductBoard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [showSubmitForm, setShowSubmitForm] = useState(false);
   const [expandedFeedbackId, setExpandedFeedbackId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form states
   const [name, setName] = useState("");
   const [tagline, setTagline] = useState("");
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // New feedback comment
   const [newCommentText, setNewCommentText] = useState("");
@@ -114,6 +118,7 @@ export default function ProductBoard() {
       makerName: makerName,
       makerRole: profile.role,
       url: url.trim() || "https://thehustlehub.workspace",
+      imageUrl: imagePreview || imageUrl.trim() || undefined,
       upvotes: 1,
       downvotes: 0,
       userVoted: "up",
@@ -127,6 +132,8 @@ export default function ProductBoard() {
     setTagline("");
     setDescription("");
     setUrl("");
+    setImageUrl("");
+    setImagePreview(null);
   };
 
   const handleVote = (productId: string, voteType: "up" | "down") => {
@@ -241,6 +248,58 @@ export default function ProductBoard() {
                   placeholder="https://..."
                 />
               </div>
+
+              {/* Image Upload */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Product Screenshot / Logo</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setImagePreview(ev.target?.result as string);
+                      setImageUrl("");
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+                {imagePreview ? (
+                  <div className="relative w-full h-40 rounded-xl overflow-hidden border border-slate-200 group">
+                    <img src={imagePreview} alt="preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => { setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                      className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 bg-slate-50 border border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-xl px-4 py-3 text-sm font-semibold transition-all"
+                    >
+                      <ImagePlus className="w-4 h-4" />
+                      Upload Image
+                    </button>
+                    <input
+                      type="url"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="or paste image URL..."
+                      className="flex-1 bg-slate-50 border-0 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowSubmitForm(false)} className="px-5 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">Cancel</button>
                 <button type="submit" className="bg-slate-900 text-white px-8 py-2.5 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all">Launch Now</button>
@@ -258,6 +317,11 @@ export default function ProductBoard() {
             )}
             {products.map((p) => (
               <div key={p.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden hover:shadow-md transition-shadow">
+                {p.imageUrl && (
+                  <div className="w-full h-48 overflow-hidden bg-slate-100">
+                    <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                  </div>
+                )}
                 <div className="p-6 flex items-start gap-6">
                   <div className="flex flex-col items-center gap-1 bg-slate-50 rounded-2xl p-2 border border-slate-100 min-w-[64px]">
                     <button onClick={() => handleVote(p.id, "up")} className={`p-1.5 rounded-xl transition-colors ${p.userVoted === "up" ? "bg-emerald-100 text-emerald-600" : "hover:bg-white text-slate-400"}`}><ArrowUp className="w-6 h-6" /></button>
