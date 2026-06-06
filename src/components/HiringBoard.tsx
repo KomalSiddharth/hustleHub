@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Briefcase, Heart, MessageSquare, Plus, Share2, MapPin, DollarSign, Calendar, Filter, ArrowUpDown, Send, Search } from "lucide-react";
-import { saveAppStateToStore, getActiveFirestore } from "../lib/firebaseSync";
+import { saveAppStateToStore, getActiveFirestore, getActiveAuth } from "../lib/firebaseSync";
 import { onSnapshot, doc } from "firebase/firestore";
 
 export interface JobPost {
@@ -12,7 +12,8 @@ export interface JobPost {
   description: string;
   authorName: string;
   likes: number;
-  userLiked?: boolean;
+  likesMap?: Record<string, boolean>; // per-user likes: { uid: true }
+  userLiked?: boolean; // legacy only — do NOT use for current user check
   comments: JobComment[];
   createdAt: string;
   category: "tech" | "growth" | "design" | "other";
@@ -30,11 +31,12 @@ const DEFAULT_JOBS: JobPost[] = [];
 export default function HiringBoard() {
   const [jobs, setJobs] = useState<JobPost[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const uid = getActiveAuth()?.currentUser?.uid || "anon_" + (localStorage.getItem("hustle_hub_logged_name") || "user");
   const [expandedCommentsId, setExpandedCommentsId] = useState<string | null>(null);
   const [copiedNotification, setCopiedNotification] = useState<string | null>(null);
 
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [orderBy, setOrderBy] = useState<string>("newest");
+  const [orderBy, setOrderBy] = useState<string>("likes");
   const [searchQuery, setSearchQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("all"); // all, today, week, month
@@ -108,7 +110,7 @@ export default function HiringBoard() {
       authorName: profileName,
       category: categoryInput,
       likes: 0,
-      userLiked: false,
+      likesMap: {},
       createdAt: new Date().toISOString().split("T")[0],
       comments: []
     };
@@ -125,11 +127,14 @@ export default function HiringBoard() {
   const handleLike = (jobId: string) => {
     const updated = jobs.map((j) => {
       if (j.id !== jobId) return j;
-      if (j.userLiked) {
-        return { ...j, likes: Math.max(0, j.likes - 1), userLiked: false };
+      const currentMap: Record<string, boolean> = { ...(j.likesMap || {}) };
+      if (currentMap[uid]) {
+        delete currentMap[uid];
       } else {
-        return { ...j, likes: j.likes + 1, userLiked: true };
+        currentMap[uid] = true;
       }
+      const likesCount = Object.keys(currentMap).length;
+      return { ...j, likesMap: currentMap, likes: likesCount };
     });
     saveJobs(updated);
   };
@@ -386,8 +391,8 @@ export default function HiringBoard() {
                       <span className="text-xs font-bold text-slate-500">Posted by {j.authorName}</span>
                    </div>
                    <div className="flex items-center gap-4">
-                      <button onClick={() => handleLike(j.id)} className={`flex items-center gap-1.5 transition-colors ${j.userLiked ? "text-rose-500" : "text-slate-400 hover:text-rose-500"}`}>
-                        <Heart className={`w-4 h-4 ${j.userLiked ? "fill-current" : ""}`} />
+                      <button onClick={() => handleLike(j.id)} className={`flex items-center gap-1.5 transition-colors ${j.likesMap?.[uid] ? "text-rose-500" : "text-slate-400 hover:text-rose-500"}`}>
+                        <Heart className={`w-4 h-4 ${j.likesMap?.[uid] ? "fill-current" : ""}`} />
                         <span className="text-xs font-bold">{j.likes}</span>
                       </button>
                       <button onClick={() => handleShare(j)} className="text-slate-400 hover:text-indigo-600 transition-colors">

@@ -223,9 +223,10 @@ export default function ProductBoard() {
     setNewCommentText("");
   };
 
-  const leaderboard = [...products]
-    .sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes))
-    .slice(0, 10);
+  // Sort all products by net score (upvotes - downvotes) descending — live
+  const sortedProducts = [...products].sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+
+  const leaderboard = sortedProducts.slice(0, 10);
 
   return (
     <div className="bg-slate-50 min-h-full p-4 md:p-8 font-sans text-slate-900">
@@ -348,8 +349,8 @@ export default function ProductBoard() {
                 <p className="text-slate-400 font-medium">No products launched yet. Be the first!</p>
               </div>
             )}
-            {products.map((p) => {
-              const userVoted = p.votes?.[uid] ?? p.userVoted ?? null;
+            {sortedProducts.map((p) => {
+              const userVoted = p.votes?.[uid] ?? null;
               return (
               <div key={p.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden hover:shadow-md transition-shadow">
                 {p.imageUrl && (
