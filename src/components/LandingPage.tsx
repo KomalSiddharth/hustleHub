@@ -446,7 +446,7 @@ export default function LandingPage({
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.12 }}
-            className="rounded-[28px] border border-white/50 bg-white/88 p-4 shadow-2xl shadow-stone-950/20 backdrop-blur-xl md:p-6"
+            className="rounded-[28px] border border-white/50 bg-white/88 p-4 shadow-2xl shadow-stone-950/20 backdrop-blur-xl md:p-6 min-h-[520px] flex flex-col justify-start"
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
